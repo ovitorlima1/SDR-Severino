@@ -32,7 +32,7 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, initialDelay =
  * Analisa um único cliente usando busca na web e IA
  */
 export const analyzeSingleSegment = async (client: Client): Promise<SegmentAnalysis | null> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
   
   const companyInfo = { 
     id: client.id, 
@@ -103,7 +103,7 @@ export const generateCampaignMessage = async (
   contextInfo: { state: string, sector: string, potential: string },
   clients: Client[]
 ): Promise<MessageTemplate> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
   
   const sampleData = clients.slice(0, 3).map(c => `${c.name} (${c.company})`).join(', ');
 
@@ -162,7 +162,7 @@ export const generateCampaignMessage = async (
 };
 
 export const qualifyCompany = async (companyOrCnpj: string): Promise<BilliAnalysis> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
   const cleanInput = companyOrCnpj.replace(/[^\d]/g, '');
   const isCnpjInput = cleanInput.length === 14; 
   const searchTerm = isCnpjInput ? cleanInput.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5") : companyOrCnpj;
