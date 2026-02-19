@@ -1,0 +1,5 @@
+{
+  "name": "Remix: Severino SDR",
+  "description": "Uma plataforma inteligente para SDRs visualizarem segmentos de clientes gerados por IA e dispararem campanhas personalizadas.",
+  "requestFramePermissions": []
+}
