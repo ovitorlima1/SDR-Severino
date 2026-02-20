@@ -4,13 +4,14 @@ import { Send, Wand2, CheckCircle, Copy, Filter, MapPin, Building2, Users, Loade
 import * as XLSX from 'xlsx';
 import { Client, MessageTemplate } from '../types';
 import { generateCampaignMessage } from '../services/geminiService';
-import { 
-  fetchCampaignAudienceCount, 
-  fetchCampaignSampleClients, 
-  createCampaign, 
-  fetchCampaignAudienceClients, 
+import {
+  fetchCampaignAudienceCount,
+  fetchCampaignSampleClients,
+  createCampaign,
+  fetchCampaignAudienceClients,
   fetchCampaignClasses,
-  fetchProfileDistribution
+  fetchProfileDistribution,
+  fetchCampaignAudienceIds
 } from '../services/persistenceService';
 
 interface CampaignManagerProps {
@@ -25,15 +26,15 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterPotencia, setFilterPotencia] = useState<string>('');
   const [activeChannel, setActiveChannel] = useState<Channel>('email');
-  
+
   // Estados para filtros carregados do banco
   const [availableCategories, setAvailableCategories] = useState<string[]>([]);
   const [availableProfiles, setAvailableProfiles] = useState<string[]>([]);
-  
+
   const [dbCount, setDbCount] = useState<number>(0);
   const [isLoadingCount, setIsLoadingCount] = useState(false);
   const [sendLimit, setSendLimit] = useState<number>(0);
-  
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedMessage, setGeneratedMessage] = useState<MessageTemplate | null>(null);
   const [sendStatus, setSendStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
@@ -74,7 +75,7 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
           category: filterCategory === 'all' ? undefined : filterCategory,
           potencia: filterPotencia || undefined
         });
-        
+
         if (isActive) {
           setDbCount(count);
           setSendLimit(count);
@@ -148,8 +149,8 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
       const ws = XLSX.utils.json_to_sheet(exportData);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Campanha_Multi_Canal");
-      
-      const fileName = `Billi_Campanha_${selectedProfile}_${new Date().toISOString().slice(0,10)}.xlsx`;
+
+      const fileName = `Billi_Campanha_${selectedProfile}_${new Date().toISOString().slice(0, 10)}.xlsx`;
       XLSX.writeFile(wb, fileName);
 
     } catch (error) {
@@ -164,6 +165,14 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
     if (!generatedMessage) return;
     setSendStatus('sending');
     try {
+      // Busca os IDs dos leads que fazem parte dessa campanha
+      const leadIds = await fetchCampaignAudienceIds({
+        profile: selectedProfile || undefined,
+        state: filterState === 'all' ? undefined : filterState,
+        category: filterCategory === 'all' ? undefined : filterCategory,
+        potencia: filterPotencia || undefined
+      }, sendLimit);
+
       await createCampaign({
         name: `Campanha Billi ${selectedProfile} - ${new Date().toLocaleDateString()}`,
         segmentProfile: selectedProfile,
@@ -176,7 +185,8 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
         whatsappBody: generatedMessage.whatsappBody,
         linkedinBody: generatedMessage.linkedinBody,
         status: 'Enviada'
-      });
+      }, leadIds);
+
       setTimeout(() => setSendStatus('sent'), 1500);
     } catch (error) {
       console.error(error);
@@ -203,11 +213,11 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
             <h3 className="text-xs font-black text-slate-900 uppercase flex items-center gap-2 tracking-widest border-b border-slate-100 pb-4">
               <Filter size={14} className="text-primary" /> Setup da Campanha
             </h3>
-            
+
             <div className="space-y-4">
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block">Perfil Billi (do Banco)</label>
-                <select 
+                <select
                   className={selectClassName}
                   value={selectedProfile}
                   onChange={(e) => setSelectedProfile(e.target.value)}
@@ -221,7 +231,7 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
                 <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block flex items-center gap-1">
                   <MapPin size={10} /> Estado (Região)
                 </label>
-                <select 
+                <select
                   className={selectClassName}
                   value={filterState}
                   onChange={(e) => setFilterState(e.target.value)}
@@ -235,7 +245,7 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
                 <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block flex items-center gap-1">
                   <Building2 size={10} /> Setor (Classe)
                 </label>
-                <select 
+                <select
                   className={selectClassName}
                   value={filterCategory}
                   onChange={(e) => setFilterCategory(e.target.value)}
@@ -249,16 +259,16 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
                 <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block flex items-center gap-1">
                   <Zap size={10} /> Potencial (Calibragem)
                 </label>
-                <select 
+                <select
                   className={selectClassName}
                   value={filterPotencia}
                   onChange={(e) => setFilterPotencia(e.target.value)}
                 >
-                   <option value="">Selecione Potencial...</option>
-                   <option value="Alta Voltagem (Escala/Capex)">Alta Voltagem (Escala/Capex)</option>
-                   <option value="Grande Porte (Escala/Capex)">Grande Porte (Escala/Capex)</option>
-                   <option value="Médio Porte (Fôlego/Fluxo)">Médio Porte (Fôlego/Fluxo)</option>
-                   <option value="Pequeno Porte (Fôlego/Fluxo)">Pequeno Porte (Fôlego/Fluxo)</option>
+                  <option value="">Selecione Potencial...</option>
+                  <option value="Alta Voltagem (Escala/Capex)">Alta Voltagem (Escala/Capex)</option>
+                  <option value="Grande Porte (Escala/Capex)">Grande Porte (Escala/Capex)</option>
+                  <option value="Médio Porte (Fôlego/Fluxo)">Médio Porte (Fôlego/Fluxo)</option>
+                  <option value="Pequeno Porte (Fôlego/Fluxo)">Pequeno Porte (Fôlego/Fluxo)</option>
                 </select>
               </div>
 
@@ -276,7 +286,7 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
                   <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block flex items-center gap-1">
                     <Users size={10} /> Volume do Disparo
                   </label>
-                  <input 
+                  <input
                     type="number"
                     className={selectClassName}
                     value={sendLimit}
@@ -308,33 +318,33 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
             <div className="bg-white border border-slate-200 rounded-xl shadow-xl flex flex-col h-full transition-all">
               {/* Header com Tabs */}
               <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap gap-2 items-center justify-between rounded-t-xl">
-                 <div className="flex gap-2">
-                    <button 
-                      onClick={() => setActiveChannel('email')}
-                      className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all ${activeChannel === 'email' ? 'bg-primary text-white shadow-sm' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
-                    >
-                      <Mail size={14} /> E-mail
-                    </button>
-                    <button 
-                      onClick={() => setActiveChannel('whatsapp')}
-                      className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all ${activeChannel === 'whatsapp' ? 'bg-green-600 text-white shadow-sm' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
-                    >
-                      <MessageCircle size={14} /> WhatsApp
-                    </button>
-                    <button 
-                      onClick={() => setActiveChannel('linkedin')}
-                      className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all ${activeChannel === 'linkedin' ? 'bg-blue-700 text-white shadow-sm' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
-                    >
-                      <Linkedin size={14} /> LinkedIn
-                    </button>
-                 </div>
-                 <div className="hidden sm:block">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-white px-3 py-1.5 rounded-full border border-slate-200">
-                      Target: {selectedProfile}
-                    </span>
-                 </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setActiveChannel('email')}
+                    className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all ${activeChannel === 'email' ? 'bg-primary text-white shadow-sm' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
+                  >
+                    <Mail size={14} /> E-mail
+                  </button>
+                  <button
+                    onClick={() => setActiveChannel('whatsapp')}
+                    className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all ${activeChannel === 'whatsapp' ? 'bg-green-600 text-white shadow-sm' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
+                  >
+                    <MessageCircle size={14} /> WhatsApp
+                  </button>
+                  <button
+                    onClick={() => setActiveChannel('linkedin')}
+                    className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all ${activeChannel === 'linkedin' ? 'bg-blue-700 text-white shadow-sm' : 'bg-white text-slate-400 border border-slate-200 hover:bg-slate-100'}`}
+                  >
+                    <Linkedin size={14} /> LinkedIn
+                  </button>
+                </div>
+                <div className="hidden sm:block">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-white px-3 py-1.5 rounded-full border border-slate-200">
+                    Target: {selectedProfile}
+                  </span>
+                </div>
               </div>
-              
+
               <div className="p-10 flex-1 bg-white">
                 {activeChannel === 'email' && (
                   <div className="space-y-6 animate-in fade-in duration-300">
@@ -354,8 +364,8 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">WhatsApp (Curto e Direto)</label>
                       <div className="max-w-md mx-auto relative p-6 bg-[#DCF8C6] rounded-xl shadow-sm border border-[#BDD9A7]">
-                         <div className="absolute top-0 right-0 p-2 text-[10px] text-slate-400 font-bold uppercase">Preview WhatsApp</div>
-                         <p className="text-slate-800 font-medium whitespace-pre-wrap">{generatedMessage.whatsappBody}</p>
+                        <div className="absolute top-0 right-0 p-2 text-[10px] text-slate-400 font-bold uppercase">Preview WhatsApp</div>
+                        <p className="text-slate-800 font-medium whitespace-pre-wrap">{generatedMessage.whatsappBody}</p>
                       </div>
                     </div>
                   </div>
@@ -366,14 +376,14 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">LinkedIn (Conexão Contextual)</label>
                       <div className="max-w-lg mx-auto p-6 bg-slate-50 border border-slate-200 rounded-xl flex gap-4">
-                         <div className="w-12 h-12 bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xl rounded shrink-0">B</div>
-                         <div className="space-y-3">
-                            <div className="flex gap-2 items-baseline">
-                               <span className="font-bold text-sm">Time Billi Capital</span>
-                               <span className="text-[10px] text-slate-400">1º</span>
-                            </div>
-                            <p className="text-sm text-slate-700 leading-relaxed">{generatedMessage.linkedinBody}</p>
-                         </div>
+                        <div className="w-12 h-12 bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xl rounded shrink-0">B</div>
+                        <div className="space-y-3">
+                          <div className="flex gap-2 items-baseline">
+                            <span className="font-bold text-sm">Time Billi Capital</span>
+                            <span className="text-[10px] text-slate-400">1º</span>
+                          </div>
+                          <p className="text-sm text-slate-700 leading-relaxed">{generatedMessage.linkedinBody}</p>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -381,7 +391,7 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
               </div>
 
               <div className="p-6 border-t border-slate-100 flex justify-between items-center bg-slate-50 rounded-b-xl">
-                <button 
+                <button
                   onClick={() => {
                     const text = activeChannel === 'email' ? generatedMessage.emailBody : activeChannel === 'whatsapp' ? generatedMessage.whatsappBody : generatedMessage.linkedinBody;
                     navigator.clipboard.writeText(text);
@@ -391,7 +401,7 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
                   <Copy size={14} /> Copiar Selecionado
                 </button>
                 <div className="flex items-center gap-4">
-                  <button 
+                  <button
                     onClick={handleExport}
                     disabled={isExporting}
                     className="px-6 py-4 bg-white border border-slate-200 text-slate-700 font-bold uppercase tracking-wider text-xs flex items-center gap-2 hover:bg-slate-50 hover:border-green-500 hover:text-green-600 transition-all rounded-lg"
@@ -400,7 +410,7 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
                     Exportar Planilha ({sendLimit} Leads)
                   </button>
 
-                  <button 
+                  <button
                     onClick={handleSend}
                     disabled={sendStatus !== 'idle'}
                     className={`px-10 py-4 font-black uppercase tracking-wider text-xs flex items-center gap-2 transition-all shadow-lg rounded-lg
@@ -418,9 +428,9 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
               <h3 className="text-2xl font-black text-slate-800 mb-2 tracking-tight">Estratégia Billi Capital</h3>
               <p className="max-w-md mb-6 font-medium">Preencha o perfil e o potencial da carga ao lado. O Severino irá gerar 3 abordagens personalizadas (E-mail, WhatsApp e LinkedIn) com foco em liquidez estratégica.</p>
               {isLoadingCount && (
-                 <div className="flex items-center gap-2 text-slate-700 font-bold text-xs bg-slate-100 px-6 py-3 uppercase tracking-wider rounded-full">
-                    <Loader2 className="animate-spin" size={14} /> Consultando base Supabase...
-                 </div>
+                <div className="flex items-center gap-2 text-slate-700 font-bold text-xs bg-slate-100 px-6 py-3 uppercase tracking-wider rounded-full">
+                  <Loader2 className="animate-spin" size={14} /> Consultando base Supabase...
+                </div>
               )}
             </div>
           )}

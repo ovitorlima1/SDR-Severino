@@ -2,12 +2,17 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Clock, BarChart3, Users, Send, Loader2, PieChart as PieChartIcon, Calendar } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { fetchAllCampaigns } from '../services/persistenceService';
-import { Campaign } from '../types';
+import { fetchAllCampaigns, fetchLeadsByCampaign, deleteClientFromDB } from '../services/persistenceService';
+import { Campaign, Client } from '../types';
+import { ChevronDown, ChevronUp, UserCheck, Trash2 } from 'lucide-react';
 
 export const CampaignHistory: React.FC = () => {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedCampaignId, setExpandedCampaignId] = useState<string | null>(null);
+  const [campaignLeads, setCampaignLeads] = useState<Record<string, Client[]>>({});
+  const [isLoadingLeads, setIsLoadingLeads] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
   useEffect(() => {
     const loadCampaigns = async () => {
@@ -24,6 +29,52 @@ export const CampaignHistory: React.FC = () => {
     loadCampaigns();
   }, []);
 
+  const toggleExpand = async (campaignId: string) => {
+    if (expandedCampaignId === campaignId) {
+      setExpandedCampaignId(null);
+      return;
+    }
+
+    setExpandedCampaignId(campaignId);
+
+    // Carrega os leads se ainda não foram carregados
+    if (!campaignLeads[campaignId]) {
+      setIsLoadingLeads(campaignId);
+      try {
+        const leads = await fetchLeadsByCampaign(campaignId);
+        setCampaignLeads(prev => ({ ...prev, [campaignId]: leads }));
+      } catch (error) {
+        console.error("Erro ao carregar leads da campanha", error);
+      } finally {
+        setIsLoadingLeads(null);
+      }
+    }
+  };
+
+  const handleRemoveLead = async (clientId: string, campaignId: string) => {
+    if (!window.confirm("Deseja marcar este cliente como alcançado e removê-lo definitivamente do banco de dados?")) {
+      return;
+    }
+
+    setIsDeleting(clientId);
+    try {
+      await deleteClientFromDB(clientId);
+
+      // Atualiza a lista local
+      setCampaignLeads(prev => ({
+        ...prev,
+        [campaignId]: prev[campaignId].filter(c => c.id !== clientId)
+      }));
+
+      alert("Cliente removido com sucesso!");
+    } catch (error) {
+      console.error("Erro ao deletar cliente:", error);
+      alert("Erro ao remover cliente.");
+    } finally {
+      setIsDeleting(null);
+    }
+  };
+
   // KPIs
   const totalCampaigns = campaigns.length;
   const totalLeadsImpacted = campaigns.reduce((acc, curr) => acc + (curr.totalLeads || 0), 0);
@@ -38,11 +89,11 @@ export const CampaignHistory: React.FC = () => {
       const key = date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
       grouped[key] = (grouped[key] || 0) + 1;
     });
-    
+
     // Inverter para ficar cronológico se o banco retornar DESC
     return Object.entries(grouped)
       .map(([name, value]) => ({ name, value }))
-      .reverse(); 
+      .reverse();
   }, [campaigns]);
 
   // Gráfico: Distribuição por Perfil (Pie)
@@ -122,7 +173,7 @@ export const CampaignHistory: React.FC = () => {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748B', fontWeight: 700 }} tickLine={false} axisLine={false} />
                 <YAxis tick={{ fontSize: 10, fill: '#64748B', fontWeight: 700 }} tickLine={false} axisLine={false} />
-                <Tooltip 
+                <Tooltip
                   cursor={{ fill: '#f8fafc' }}
                   contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                 />
@@ -134,7 +185,7 @@ export const CampaignHistory: React.FC = () => {
 
         {/* Gráfico Distribuição */}
         <div className="bg-white p-8 border border-slate-200 rounded-xl shadow-sm min-h-[350px] flex flex-col">
-           <h4 className="text-sm font-black text-slate-900 uppercase mb-6 flex items-center gap-2">
+          <h4 className="text-sm font-black text-slate-900 uppercase mb-6 flex items-center gap-2">
             <PieChartIcon size={16} className="text-primary" /> Foco por Perfil
           </h4>
           <div className="flex-1">
@@ -182,34 +233,88 @@ export const CampaignHistory: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {campaigns.map((camp) => (
-                <tr key={camp.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4 text-xs font-bold text-slate-600">
-                    {new Date(camp.createdAt).toLocaleDateString('pt-BR')}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm font-bold text-slate-900">{camp.name}</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="inline-flex items-center px-2 py-1 rounded bg-slate-100 text-slate-700 text-[10px] font-black uppercase tracking-wider">
-                      {camp.segmentProfile || 'Todos'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-xs text-slate-500">
-                     {camp.segmentRegion === 'all' ? 'Brasil' : camp.segmentRegion} 
-                     {camp.segmentCategory && camp.segmentCategory !== 'all' ? ` • ${camp.segmentCategory}` : ''}
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <span className="text-sm font-black text-slate-900">{camp.totalLeads}</span>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-wide
-                      ${camp.status === 'Enviada' ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-500'}
-                    `}>
-                      {camp.status === 'Enviada' && <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>}
-                      {camp.status}
-                    </span>
-                  </td>
-                </tr>
+                <React.Fragment key={camp.id}>
+                  <tr
+                    className={`hover:bg-slate-50 transition-colors cursor-pointer ${expandedCampaignId === camp.id ? 'bg-slate-50' : ''}`}
+                    onClick={() => toggleExpand(camp.id)}
+                  >
+                    <td className="px-6 py-4 text-xs font-bold text-slate-600">
+                      {new Date(camp.createdAt).toLocaleDateString('pt-BR')}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        {expandedCampaignId === camp.id ? <ChevronUp size={14} className="text-primary" /> : <ChevronDown size={14} className="text-slate-400" />}
+                        <span className="text-sm font-bold text-slate-900">{camp.name}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="inline-flex items-center px-2 py-1 rounded bg-slate-100 text-slate-700 text-[10px] font-black uppercase tracking-wider">
+                        {camp.segmentProfile || 'Todos'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-xs text-slate-500">
+                      {camp.segmentRegion === 'all' ? 'Brasil' : camp.segmentRegion}
+                      {camp.segmentCategory && camp.segmentCategory !== 'all' ? ` • ${camp.segmentCategory}` : ''}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <span className="text-sm font-black text-slate-900">{camp.totalLeads}</span>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-wide
+                        ${camp.status === 'Enviada' ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-500'}
+                      `}>
+                        {camp.status === 'Enviada' && <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>}
+                        {camp.status}
+                      </span>
+                    </td>
+                  </tr>
+
+                  {/* Lista de Leads Expandida */}
+                  {expandedCampaignId === camp.id && (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-4 bg-slate-50/50 border-y border-slate-100">
+                        <div className="space-y-4 animate-in slide-in-from-top-2 duration-300">
+                          <div className="flex justify-between items-center">
+                            <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                              <Users size={12} className="text-primary" /> Clientes nesta Campanha
+                            </h5>
+                          </div>
+
+                          {isLoadingLeads === camp.id ? (
+                            <div className="flex items-center gap-2 text-xs font-bold text-slate-400 py-4">
+                              <Loader2 size={14} className="animate-spin" /> Carregando lista de leads...
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                              {(campaignLeads[camp.id] || []).map(lead => (
+                                <div key={lead.id} className="bg-white p-3 border border-slate-200 rounded-lg flex justify-between items-center shadow-sm group">
+                                  <div className="overflow-hidden">
+                                    <p className="text-xs font-black text-slate-900 truncate">{lead.name}</p>
+                                    <p className="text-[10px] text-slate-400 font-bold truncate">{lead.email || lead.cnpj || 'Sem contato'}</p>
+                                  </div>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleRemoveLead(lead.id, camp.id);
+                                    }}
+                                    disabled={isDeleting === lead.id}
+                                    title="Marcar como alcançado e remover do sistema"
+                                    className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                  >
+                                    {isDeleting === lead.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                                  </button>
+                                </div>
+                              ))}
+                              {campaignLeads[camp.id]?.length === 0 && (
+                                <p className="text-xs font-bold text-slate-400 py-4">Nenhum lead individual vinculado a esta campanha.</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
               ))}
               {campaigns.length === 0 && (
                 <tr>
