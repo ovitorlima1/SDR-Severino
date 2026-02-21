@@ -3,6 +3,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { Client, SegmentAnalysis, MessageTemplate, BilliAnalysis } from '../types';
 
 // O modelo Flash tem cotas muito maiores que o Pro para processamento em massa
+// Modelo Flash 1.5 para maior compatibilidade com todas as API Keys
 const MODEL_NAME = 'gemini-3-flash-preview';
 
 // Função utilitária para retry com backoff exponencial
@@ -15,7 +16,7 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, initialDelay =
       lastError = error;
       const errorStr = JSON.stringify(error);
       const isRateLimit = errorStr.includes('429') || errorStr.includes('RESOURCE_EXHAUSTED');
-      
+
       if (isRateLimit && i < maxRetries - 1) {
         const delay = initialDelay * Math.pow(2, i);
         console.warn(`[Severino] Limite atingido. Aguardando ${delay}ms...`);
@@ -32,32 +33,39 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, initialDelay =
  * Analisa um único cliente usando busca na web e IA
  */
 export const analyzeSingleSegment = async (client: Client): Promise<SegmentAnalysis | null> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
-  
-  const companyInfo = { 
-    id: client.id, 
-    company: client.company || client.name, 
-    cnpj: client.cnpj 
+  const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || '';
+  if (!apiKey) {
+    console.error("[Severino] API Key não encontrada!");
+    throw new Error("Configuração ausente: API Key");
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+
+  const companyInfo = {
+    id: client.id,
+    company: client.company || client.name,
+    cnpj: client.cnpj
   };
 
   const schema = {
-    type: Type.OBJECT, 
+    type: Type.OBJECT,
     properties: {
-        clientId: { type: Type.STRING },
-        foundCompany: { type: Type.STRING },
-        foundCnpj: { type: Type.STRING },
-        segmentName: { type: Type.STRING },
-        category: { type: Type.STRING },
-        state: { type: Type.STRING },
-        cnae: { type: Type.STRING },
-        profile: { type: Type.STRING },
-        description: { type: Type.STRING }
+      clientId: { type: Type.STRING },
+      foundCompany: { type: Type.STRING },
+      foundCnpj: { type: Type.STRING },
+      segmentName: { type: Type.STRING },
+      category: { type: Type.STRING },
+      state: { type: Type.STRING },
+      cnae: { type: Type.STRING },
+      profile: { type: Type.STRING },
+      description: { type: Type.STRING }
     },
     required: ['clientId', 'foundCompany', 'foundCnpj', 'segmentName', 'category', 'state', 'cnae', 'profile', 'description']
   };
 
   return withRetry(async () => {
     try {
+      console.log(`[Severino] Chamando API para lead: ${client.name} (id: ${client.id}) com modelo: ${MODEL_NAME}`);
       const response = await ai.models.generateContent({
         model: MODEL_NAME,
         contents: `VOCÊ É O SEVERINO, ESPECIALISTA EM ENRIQUECIMENTO DE DADOS PARA A BILLI CAPITAL.
@@ -77,10 +85,14 @@ export const analyzeSingleSegment = async (client: Client): Promise<SegmentAnaly
           responseSchema: schema
         }
       });
-      return response.text ? JSON.parse(response.text) : null;
+      console.log(`[Severino] Resposta recebida para ${client.name}`);
+      const result = response.text ? JSON.parse(response.text) : null;
+      if (result) console.log(`[Severino] Sucesso para o lead: ${client.name}`);
+      return result;
     } catch (error) {
       console.error(`Erro ao processar cliente ${client.id}:`, error);
-      return null;
+      // Re-throw para o withRetry capturar
+      throw error;
     }
   });
 };
@@ -99,12 +111,12 @@ export const analyzeSegments = async (clients: Client[]): Promise<SegmentAnalysi
  * GERAÇÃO DE CAMPANHAS COM LÓGICA BILLI CAPITAL
  */
 export const generateCampaignMessage = async (
-  profile: string, 
+  profile: string,
   contextInfo: { state: string, sector: string, potential: string },
   clients: Client[]
 ): Promise<MessageTemplate> => {
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
-  
+
   const sampleData = clients.slice(0, 3).map(c => `${c.name} (${c.company})`).join(', ');
 
   const schema = {
@@ -147,8 +159,8 @@ export const generateCampaignMessage = async (
       const response = await ai.models.generateContent({
         model: MODEL_NAME,
         contents: systemPrompt,
-        config: { 
-          responseMimeType: "application/json", 
+        config: {
+          responseMimeType: "application/json",
           responseSchema: schema,
           temperature: 0.8
         }
@@ -164,7 +176,7 @@ export const generateCampaignMessage = async (
 export const qualifyCompany = async (companyOrCnpj: string): Promise<BilliAnalysis> => {
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
   const cleanInput = companyOrCnpj.replace(/[^\d]/g, '');
-  const isCnpjInput = cleanInput.length === 14; 
+  const isCnpjInput = cleanInput.length === 14;
   const searchTerm = isCnpjInput ? cleanInput.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5") : companyOrCnpj;
 
   const schema = {
@@ -223,7 +235,7 @@ export const qualifyCompany = async (companyOrCnpj: string): Promise<BilliAnalys
     required: ['identification', 'eixos', 'scoring', 'profile', 'nextSteps']
   };
 
-  const prompt = isCnpjInput 
+  const prompt = isCnpjInput
     ? `AUDITORIA CADASTRAL BILLI: Pesquise EXATAMENTE o CNPJ: "${searchTerm}" no Google e retorne a análise estratégica.`
     : `BUSCA EMPRESARIAL BILLI: Encontre o CNPJ MATRIZ da empresa "${searchTerm}" no Google e retorne a análise estratégica.`;
 

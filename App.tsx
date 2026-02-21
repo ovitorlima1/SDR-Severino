@@ -9,10 +9,10 @@ import { LeadQualifier } from './components/LeadQualifier';
 import { WhatsAppManager } from './components/WhatsAppManager';
 import { Client, ViewState } from './types';
 import { analyzeSegments } from './services/geminiService';
-import { 
-  fetchClientsFromDB, 
-  saveClientsToDB, 
-  updateClientAIResult, 
+import {
+  fetchClientsFromDB,
+  saveClientsToDB,
+  updateClientAIResult,
   fetchTotalClientsCount,
   fetchPendingClients,
   fetchTotalPendingCount
@@ -28,20 +28,20 @@ const App: React.FC = () => {
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [pendingQualification, setPendingQualification] = useState<string | null>(null);
 
-  const loadData = async () => {
-    setIsLoading(true);
+  const loadData = async (silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const dbClients = await fetchClientsFromDB();
       const actualTotal = await fetchTotalClientsCount();
       const pendingTotal = await fetchTotalPendingCount();
-      
+
       setClients(dbClients);
       setTotalLeads(actualTotal);
       setTotalPending(pendingTotal);
     } catch (e) {
       console.error("Falha na conexão inicial:", e);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
@@ -51,14 +51,21 @@ const App: React.FC = () => {
 
   const handleRunAnalysis = async (limit: number) => {
     setIsAnalyzing(true);
-    
+
     // Configuração para segurança de cota 
     // BATCH_SIZE reduzido e DELAY aumentado para garantir sucesso em 10k leads
-    const BATCH_SIZE = 3; 
+    const BATCH_SIZE = 3;
     const DELAY_BETWEEN_BATCHES = 5000;
 
     try {
+      if (!process.env.GEMINI_API_KEY && !process.env.API_KEY) {
+        alert("Erro: GEMINI_API_KEY não configurada. Verifique seu arquivo .env ou as variáveis de ambiente.");
+        setIsAnalyzing(false);
+        return;
+      }
+
       const clientsToAnalyze = await fetchPendingClients(limit);
+      console.log(`[App] Leads encontrados para analisar: ${clientsToAnalyze.length}`);
 
       if (clientsToAnalyze.length === 0) {
         alert("Não há mais leads pendentes de segmentação!");
@@ -71,36 +78,44 @@ const App: React.FC = () => {
 
       for (let i = 0; i < clientsToAnalyze.length; i += BATCH_SIZE) {
         const batch = clientsToAnalyze.slice(i, i + BATCH_SIZE);
-        
+        console.log(`[App] Iniciando lote ${Math.floor(i / BATCH_SIZE) + 1} com ${batch.length} leads`);
+
         try {
+          console.log(`[App] Chamando analyzeSegments para lote de ${batch.length} leads...`);
           // Chamada à IA (agora processada sequencialmente dentro do service)
           const aiResults = await analyzeSegments(batch);
-          
+          console.log(`[App] analyzeSegments concluído. Resultados obtidos: ${aiResults.length}`);
+
           // Persistência
           for (const res of aiResults) {
             await updateClientAIResult(res.clientId, res);
           }
-          
+
           const nextProgress = Math.min(i + BATCH_SIZE, totalToProcess);
           setProgress(prev => ({ ...prev, current: nextProgress }));
-          
+
           // Delay entre blocos para respeitar limites diários
           if (nextProgress < totalToProcess) {
             await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
           }
+
+          // ATUALIZAÇÃO INCREMENTAL: Recarrega as métricas do dashboard a cada lote concluído de forma silenciosa
+          await loadData(true);
+
         } catch (batchError: any) {
           const errorStr = JSON.stringify(batchError);
           if (errorStr.includes('429') || errorStr.includes('RESOURCE_EXHAUSTED')) {
-             const confirmKey = window.confirm("Limite de cota da API atingido. Deseja selecionar sua própria API Key para continuar o processamento de alta velocidade?");
-             if (confirmKey) {
-                // Usando casting para any para evitar conflitos de tipos globais
-                await (window as any).aistudio.openSelectKey();
-                // Após selecionar a chave, o loop continua na próxima tentativa
-             } else {
-                throw batchError; // Para o processamento
-             }
+            const confirmKey = window.confirm("Limite de cota da API atingido. Deseja selecionar sua própria API Key para continuar o processamento de alta velocidade?");
+            if (confirmKey) {
+              // Usando casting para any para evitar conflitos de tipos globais
+              await (window as any).aistudio.openSelectKey();
+              // Após selecionar a chave, o loop continua na próxima tentativa
+            } else {
+              throw batchError; // Para o processamento
+            }
           } else {
             console.error("Erro no lote:", batchError);
+            alert(`Erro no lote ${Math.floor(i / BATCH_SIZE) + 1}: ${batchError.message || "Erro desconhecido"}`);
           }
         }
       }
@@ -141,20 +156,20 @@ const App: React.FC = () => {
     switch (currentView) {
       case 'dashboard':
         return (
-          <Dashboard 
-            clients={clients} 
+          <Dashboard
+            clients={clients}
             totalLeadsOverride={totalLeads}
             totalPendingOverride={totalPending}
-            onAnalyze={handleRunAnalysis} 
+            onAnalyze={handleRunAnalysis}
             isAnalyzing={isAnalyzing}
             progress={progress}
           />
         );
       case 'clients':
         return (
-          <ClientList 
-            clients={clients} 
-            setClients={handleSetClients} 
+          <ClientList
+            clients={clients}
+            setClients={handleSetClients}
             onQualify={(name) => {
               setPendingQualification(name);
               setCurrentView('qualifier');
@@ -166,8 +181,8 @@ const App: React.FC = () => {
         );
       case 'qualifier':
         return (
-          <LeadQualifier 
-            initialCompanyName={pendingQualification || undefined} 
+          <LeadQualifier
+            initialCompanyName={pendingQualification || undefined}
             onClearInitial={() => setPendingQualification(null)}
           />
         );
