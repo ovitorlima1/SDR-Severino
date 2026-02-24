@@ -11,7 +11,8 @@ import {
   fetchCampaignAudienceClients,
   fetchCampaignClasses,
   fetchProfileDistribution,
-  fetchCampaignAudienceIds
+  fetchCampaignAudienceIds,
+  fetchCampaignPotencia
 } from '../services/persistenceService';
 
 interface CampaignManagerProps {
@@ -30,6 +31,7 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
   // Estados para filtros carregados do banco
   const [availableCategories, setAvailableCategories] = useState<string[]>([]);
   const [availableProfiles, setAvailableProfiles] = useState<string[]>([]);
+  const [availablePotencias, setAvailablePotencias] = useState<string[]>([]);
 
   const [dbCount, setDbCount] = useState<number>(0);
   const [isLoadingCount, setIsLoadingCount] = useState(false);
@@ -46,11 +48,13 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
   useEffect(() => {
     const loadFilters = async () => {
       try {
-        const [classes, profilesData] = await Promise.all([
+        const [classes, profilesData, potencias] = await Promise.all([
           fetchCampaignClasses(),
-          fetchProfileDistribution()
+          fetchProfileDistribution(),
+          fetchCampaignPotencia()
         ]);
         setAvailableCategories(classes);
+        setAvailablePotencias(potencias);
         // Extrai apenas os nomes dos perfis, removendo duplicatas e "Não Segmentado" se desejar
         const profileNames = profilesData
           .map(p => p.name)
@@ -264,11 +268,8 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
                   value={filterPotencia}
                   onChange={(e) => setFilterPotencia(e.target.value)}
                 >
-                  <option value="">Selecione Potencial...</option>
-                  <option value="Alta Voltagem (Escala/Capex)">Alta Voltagem (Escala/Capex)</option>
-                  <option value="Grande Porte (Escala/Capex)">Grande Porte (Escala/Capex)</option>
-                  <option value="Médio Porte (Fôlego/Fluxo)">Médio Porte (Fôlego/Fluxo)</option>
-                  <option value="Pequeno Porte (Fôlego/Fluxo)">Pequeno Porte (Fôlego/Fluxo)</option>
+                  <option value="">Todas as Potências</option>
+                  {availablePotencias.map(p => <option key={p} value={p} className="text-slate-900">{p}</option>)}
                 </select>
               </div>
 

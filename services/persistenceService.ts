@@ -195,6 +195,26 @@ export const fetchCampaignClasses = async (): Promise<string[]> => {
   return Array.from(distinctClasses).sort();
 };
 
+/**
+ * Busca todas as potências disponíveis para filtro de campanha
+ */
+export const fetchCampaignPotencia = async (): Promise<string[]> => {
+  const { data, error } = await supabase
+    .from('clients')
+    .select('potencia')
+    .not('potencia', 'is', null)
+    .not('potencia', 'eq', '');
+
+  if (error || !data) return [];
+
+  const distinctPotencias = new Set<string>();
+  data.forEach((d: any) => {
+    if (d.potencia) distinctPotencias.add(d.potencia.trim());
+  });
+
+  return Array.from(distinctPotencias).sort();
+};
+
 const formatDateForDB = (inputValue: string | number | undefined): string | null => {
   if (!inputValue) return null;
 
