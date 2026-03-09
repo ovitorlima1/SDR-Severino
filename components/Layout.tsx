@@ -7,9 +7,11 @@ interface LayoutProps {
   children: React.ReactNode;
   currentView: ViewState;
   onChangeView: (view: ViewState) => void;
+  userEmail?: string;
+  onLogout?: () => void;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, currentView, onChangeView }) => {
+export const Layout: React.FC<LayoutProps> = ({ children, currentView, onChangeView, userEmail, onLogout }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
   const NavItem = ({ view, icon: Icon, label }: { view: ViewState; icon: any; label: string }) => (
@@ -44,27 +46,27 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentView, onChangeV
         <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto scrollbar-hide">
           <p className="px-4 text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Menu Principal</p>
           <NavItem view="dashboard" icon={LayoutDashboard} label="Dashboard" />
-          <NavItem view="clients" icon={Users} label="Carteira de Clientes" />
-          <NavItem view="qualifier" icon={Target} label="Qualificador" />
+          <NavItem view="clients" icon={Users} label="Originação de Clientes" />
+          <NavItem view="qualifier" icon={Target} label="Inteligência Qualificação" />
           <div className="mt-6 mb-2 px-4 border-t border-slate-100"></div>
           <p className="px-4 text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest mt-4">Gestão de Disparos</p>
-          <NavItem view="campaigns" icon={Send} label="Criar Campanha" />
-          <NavItem view="history" icon={Clock} label="Histórico" />
+          <NavItem view="campaigns" icon={Send} label="Gerador de Campanhas WhatsApp" />
+          <NavItem view="history" icon={Clock} label="Gestão da Carteira" />
           <div className="mt-6 mb-2 px-4 border-t border-slate-100"></div>
           <p className="px-4 text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest mt-4">Infraestrutura</p>
-          <NavItem view="whatsapp" icon={Smartphone} label="Gestão WhatsApp" />
+          <NavItem view="whatsapp" icon={Smartphone} label="Funil de Conversão " />
         </nav>
 
         <div className="p-4 m-4 bg-slate-50 rounded-2xl border border-slate-100">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-slate-900 font-black text-xs border border-slate-200 shadow-sm">
-              SV
+              {userEmail ? userEmail[0].toUpperCase() : 'SV'}
             </div>
-            <div className="flex-1">
-              <p className="text-sm font-bold text-slate-900">Severino</p>
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Assistente Geral</p>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-slate-900 truncate">{userEmail || 'Usuário'}</p>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Usuário</p>
             </div>
-            <button className="text-slate-400 hover:text-red-500 transition-colors">
+            <button onClick={onLogout} className="text-slate-400 hover:text-red-500 transition-colors" title="Sair">
               <LogOut size={16} />
             </button>
           </div>

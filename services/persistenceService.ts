@@ -536,3 +536,35 @@ export const deleteWhatsAppNumber = async (id: string) => {
 
   if (error) throw error;
 };
+
+export const fetchCampaignsCount = async (): Promise<number> => {
+  const { count, error } = await supabase
+    .from('campaigns')
+    .select('*', { count: 'exact', head: true });
+  return error ? 0 : (count || 0);
+};
+
+export const fetchCampaignsByRegion = async (): Promise<{ name: string; value: number }[]> => {
+  const { data, error } = await supabase
+    .from('campaigns')
+    .select('segment_region');
+  if (error || !data) return [];
+
+  const map: Record<string, number> = {};
+  data.forEach((d: any) => {
+    const region = d.segment_region || 'Todos';
+    map[region] = (map[region] || 0) + 1;
+  });
+
+  return Object.entries(map)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
+};
+
+export const fetchLeadsInCampaignsCount = async (): Promise<number> => {
+  const { data, error } = await supabase
+    .from('campaign_leads')
+    .select('client_id');
+  if (error || !data) return 0;
+  return new Set(data.map((d: any) => d.client_id)).size;
+};

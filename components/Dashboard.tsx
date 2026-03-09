@@ -1,34 +1,29 @@
 
 import React, { useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList } from 'recharts';
-import { Target, Loader2, Search, BrainCircuit, X, Database, Briefcase } from 'lucide-react';
+import { Target, Loader2, BrainCircuit, Database, Briefcase, Megaphone, UserCheck } from 'lucide-react';
 import { Client } from '../types';
-import { fetchTariffDistribution, fetchProfileDistribution, fetchSectorDistribution } from '../services/persistenceService';
+import { fetchTariffDistribution, fetchProfileDistribution, fetchSectorDistribution, fetchCampaignsCount, fetchCampaignsByRegion, fetchLeadsInCampaignsCount } from '../services/persistenceService';
 
 interface DashboardProps {
   clients: Client[];
   totalLeadsOverride?: number;
   totalPendingOverride?: number;
-  onAnalyze: (limit: number) => void;
-  isAnalyzing: boolean;
-  progress?: { current: number; total: number };
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ 
-  clients, 
-  totalLeadsOverride, 
+export const Dashboard: React.FC<DashboardProps> = ({
+  clients,
+  totalLeadsOverride,
   totalPendingOverride,
-  onAnalyze, 
-  isAnalyzing, 
-  progress 
 }) => {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [limitInput, setLimitInput] = useState<number>(100);
   
   // Estados para dados estatísticos vindos diretamente do banco (sem limite de 20k)
   const [tariffStats, setTariffStats] = useState<{name: string, value: number}[]>([]);
   const [profileStats, setProfileStats] = useState<{name: string, value: number}[]>([]);
   const [sectorStats, setSectorStats] = useState<{name: string, value: number}[]>([]);
+  const [campaignsCount, setCampaignsCount] = useState<number>(0);
+  const [campaignsByRegion, setCampaignsByRegion] = useState<{name: string, value: number}[]>([]);
+  const [leadsInCampaigns, setLeadsInCampaigns] = useState<number>(0);
   const [loadingStats, setLoadingStats] = useState(true);
 
   const totalLeads = totalLeadsOverride !== undefined ? totalLeadsOverride : clients.length;
@@ -37,12 +32,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
     : clients.filter(c => c.segment === 'Não Segmentado').length;
 
   const enrichedClients = totalLeads - pendingCount;
-  
-  useEffect(() => {
-    if (isModalOpen) {
-      setLimitInput(100); 
-    }
-  }, [isModalOpen]);
 
   useEffect(() => {
     let mounted = true;
@@ -52,16 +41,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
       
       // Carrega Estatísticas Reais do Banco
       try {
-        const [tariffs, profiles, sectors] = await Promise.all([
+        const [tariffs, profiles, sectors, campCount, campRegions, inCampaigns] = await Promise.all([
            fetchTariffDistribution(),
            fetchProfileDistribution(),
-           fetchSectorDistribution()
+           fetchSectorDistribution(),
+           fetchCampaignsCount(),
+           fetchCampaignsByRegion(),
+           fetchLeadsInCampaignsCount()
         ]);
 
         if (mounted) {
           setTariffStats(tariffs);
           setProfileStats(profiles);
           setSectorStats(sectors);
+          setCampaignsCount(campCount);
+          setCampaignsByRegion(campRegions);
+          setLeadsInCampaigns(inCampaigns);
         }
       } catch (e) {
         console.error("Falha ao carregar estatísticas do dashboard");
@@ -73,11 +68,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
     return () => { mounted = false; };
   }, []); // Executa apenas na montagem
-
-  const handleStartAnalysis = () => {
-    onAnalyze(limitInput);
-    setIsModalOpen(false);
-  };
 
   // Cores Clean: Amarelo (Primary) + Tons de Slate
   const COLORS = ['#F5BE01', '#E2E8F0', '#94A3B8', '#64748B', '#475569', '#1E293B'];
@@ -112,111 +102,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
     );
   };
 
-  const percentProgress = progress && progress.total > 0 
-    ? Math.round((progress.current / progress.total) * 100) 
-    : 0;
-
   return (
     <div className="space-y-8 relative">
-      {/* Modal de Configuração de Análise */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-200/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl border border-slate-200 shadow-2xl w-full max-w-md p-8 animate-in fade-in zoom-in duration-200">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-black text-slate-900 flex items-center gap-2 uppercase tracking-tighter">
-                <BrainCircuit className="text-primary" /> Mapear Base
-              </h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-900">
-                <X size={24} />
-              </button>
-            </div>
-            
-            <div className="space-y-6">
-              <div className="bg-slate-50 p-5 border border-slate-100 rounded-lg">
-                <p className="text-sm text-slate-600 font-medium">
-                  Existem <span className="font-black text-slate-900">{pendingCount.toLocaleString()}</span> leads pendentes no banco.
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-black text-slate-400 uppercase mb-3">Quantos leads processar?</label>
-                <div className="flex items-center border-b border-slate-200 pb-2">
-                    <input 
-                      type="number" 
-                      min="1"
-                      max={Math.min(pendingCount, 1000)}
-                      value={limitInput}
-                      onChange={(e) => setLimitInput(Number(e.target.value))}
-                      className="w-full text-center text-4xl font-black text-slate-900 outline-none bg-transparent"
-                    />
-                </div>
-                
-                <div className="flex justify-between text-[10px] font-bold text-slate-400 mt-4 px-2">
-                  <button className="hover:text-primary transition-colors uppercase" onClick={() => setLimitInput(10)}>10 leads</button>
-                  <button className="hover:text-primary transition-colors uppercase" onClick={() => setLimitInput(50)}>50 leads</button>
-                  <button className="hover:text-primary transition-colors uppercase" onClick={() => setLimitInput(100)}>100 leads</button>
-                  <button className="hover:text-primary transition-colors uppercase" onClick={() => setLimitInput(200)}>200 leads</button>
-                </div>
-              </div>
-
-              <div className="pt-6 flex gap-4">
-                <button 
-                  onClick={() => setIsModalOpen(false)}
-                  className="flex-1 py-4 bg-white border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition-colors uppercase text-xs tracking-wider rounded-lg"
-                >
-                  Cancelar
-                </button>
-                <button 
-                  onClick={handleStartAnalysis}
-                  disabled={limitInput < 1}
-                  className="flex-1 py-4 bg-primary text-white font-black hover:bg-primary/90 transition-colors shadow-lg disabled:opacity-50 uppercase text-xs tracking-wider rounded-lg"
-                >
-                  Iniciar Mapeamento
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 pb-6">
-        <div>
-          <h2 className="text-3xl font-black text-slate-900 tracking-tight">Inteligência de Base</h2>
-          <p className="text-slate-500 font-medium mt-1">
-            Segmentação e enriquecimento de dados via IA.
-          </p>
-        </div>
-        <div className="flex flex-col items-end gap-3 w-full sm:w-auto">
-          <button
-            onClick={() => setIsModalOpen(true)}
-            disabled={isAnalyzing || pendingCount === 0}
-            className={`w-full sm:w-auto flex items-center justify-center px-8 py-4 transition-all shadow-md disabled:opacity-50 font-black uppercase tracking-wider text-xs rounded-lg ${isAnalyzing ? 'bg-slate-100 text-slate-500' : 'bg-primary text-white hover:bg-primary/90'}`}
-          >
-            {isAnalyzing ? (
-              <><Loader2 className="animate-spin mr-2" /> Processando...</>
-            ) : (
-              <><Search className="mr-2" size={16} /> Mapear Base</>
-            )}
-          </button>
-          
-          {isAnalyzing && progress && (
-            <div className="w-full sm:w-64 space-y-2">
-              <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                <span>Progresso</span>
-                <span>{progress.current} / {progress.total}</span>
-              </div>
-              <div className="h-1.5 w-full bg-slate-200 overflow-hidden rounded-full">
-                <div 
-                  className="h-full bg-primary transition-all duration-500 ease-out rounded-full"
-                  style={{ width: `${percentProgress}%` }}
-                />
-              </div>
-            </div>
-          )}
-        </div>
+      <div className="border-b border-slate-200 pb-6">
+        <h2 className="text-3xl font-black text-slate-900 tracking-tight">Inteligência de Base</h2>
+        <p className="text-slate-500 font-medium mt-1">
+          Segmentação e enriquecimento de dados via IA.
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
         <div className="bg-white p-6 border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition-all">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Database size={12}/> Total Leads</p>
           <h3 className="text-4xl font-black text-slate-900 mt-2 tracking-tighter">{totalLeads.toLocaleString()}</h3>
@@ -231,18 +126,27 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </span>
           </div>
         </div>
-        <div className="bg-white p-6 border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition-all">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fila de Espera</p>
+        <div className="bg-white p-6 border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition-all relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-1 h-full bg-primary"></div>
+          <p className="text-[10px] font-black text-primary uppercase tracking-widest">Leads p/ Segmentar</p>
           <div className="flex items-end justify-between mt-2">
-            <h3 className="text-4xl font-black text-slate-400 tracking-tighter">{pendingCount.toLocaleString()}</h3>
-             <span className="text-xs font-bold text-slate-300 mb-1">
+            <h3 className="text-4xl font-black text-slate-900 tracking-tighter">{pendingCount.toLocaleString()}</h3>
+             <span className="text-xs font-bold text-slate-400 mb-1 bg-slate-50 px-2 py-1 rounded">
               {totalLeads > 0 ? Math.round((pendingCount/totalLeads)*100) : 0}%
             </span>
           </div>
         </div>
+        <div className="bg-white p-6 border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition-all">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Megaphone size={12}/> Total Campanhas</p>
+          <h3 className="text-4xl font-black text-slate-900 mt-2 tracking-tighter">{campaignsCount.toLocaleString()}</h3>
+        </div>
+        <div className="bg-white p-6 border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition-all">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><UserCheck size={12}/> Disponíveis p/ Campanha</p>
+          <h3 className="text-4xl font-black text-slate-900 mt-2 tracking-tighter">{(totalLeads - leadsInCampaigns).toLocaleString()}</h3>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
         {/* Gráfico de Perfis (Mindset) */}
         <div className="bg-white p-8 border border-slate-200 rounded-xl shadow-sm h-[480px] flex flex-col">
           <h3 className="text-sm font-black text-slate-900 uppercase mb-1 flex items-center gap-2 tracking-wide">
@@ -351,23 +255,69 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <BarChart data={tariffStats} layout="vertical" margin={{ left: 0, right: 40, top: 10, bottom: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
                   <XAxis type="number" hide />
-                  <YAxis 
-                    dataKey="name" 
-                    type="category" 
-                    width={90} 
-                    tick={{fontSize: 10, fontWeight: '700', fill: '#64748B'}} 
+                  <YAxis
+                    dataKey="name"
+                    type="category"
+                    width={90}
+                    tick={{fontSize: 10, fontWeight: '700', fill: '#64748B'}}
                     tickFormatter={(val: any) => String(val).toUpperCase()}
                   />
-                  <Tooltip 
+                  <Tooltip
                     cursor={{ fill: '#f8fafc' }}
                     contentStyle={{ backgroundColor: '#fff', color: '#1E293B', borderRadius: '8px', border: '1px solid #E2E8F0' }}
                   />
                   <Bar dataKey="value" fill="#F5BE01" barSize={20} radius={[0, 4, 4, 0]}>
-                    <LabelList 
-                      dataKey="value" 
-                      position="right" 
+                    <LabelList
+                      dataKey="value"
+                      position="right"
                       offset={10}
-                      style={{ fill: '#64748B', fontSize: '12px', fontWeight: '700' }} 
+                      style={{ fill: '#64748B', fontSize: '12px', fontWeight: '700' }}
+                      formatter={(val: number) => `${val}`}
+                    />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-slate-300">
+                <span className="text-xs font-bold uppercase">Sem dados</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Gráfico de Campanhas por Estado */}
+        <div className="bg-white p-8 border border-slate-200 rounded-xl shadow-sm h-[480px] flex flex-col">
+          <h3 className="text-sm font-black text-slate-900 uppercase mb-1 flex items-center gap-2 tracking-wide">
+            <Megaphone size={16} className="text-primary" /> Campanhas por Estado
+          </h3>
+          <p className="text-[10px] text-slate-400 mb-6 font-bold uppercase tracking-wider">Distribuição por região</p>
+          <div className="flex-1 relative">
+            {loadingStats ? (
+              <div className="absolute inset-0 flex items-center justify-center">
+                 <Loader2 className="animate-spin text-slate-300" size={32} />
+              </div>
+            ) : campaignsByRegion.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={campaignsByRegion} layout="vertical" margin={{ left: 0, right: 40, top: 10, bottom: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
+                  <XAxis type="number" hide />
+                  <YAxis
+                    dataKey="name"
+                    type="category"
+                    width={90}
+                    tick={{fontSize: 10, fontWeight: '700', fill: '#64748B'}}
+                    tickFormatter={(val: any) => String(val).toUpperCase()}
+                  />
+                  <Tooltip
+                    cursor={{ fill: '#f8fafc' }}
+                    contentStyle={{ backgroundColor: '#fff', color: '#1E293B', borderRadius: '8px', border: '1px solid #E2E8F0' }}
+                  />
+                  <Bar dataKey="value" fill="#F5BE01" barSize={20} radius={[0, 4, 4, 0]}>
+                    <LabelList
+                      dataKey="value"
+                      position="right"
+                      offset={10}
+                      style={{ fill: '#64748B', fontSize: '12px', fontWeight: '700' }}
                       formatter={(val: number) => `${val}`}
                     />
                   </Bar>

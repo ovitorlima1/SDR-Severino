@@ -49,7 +49,7 @@ export const LeadQualifier: React.FC<LeadQualifierProps> = ({ initialCompanyName
             <div className="bg-primary/10 p-2 rounded-lg">
                 <Shield className="text-primary" size={24} />
             </div>
-            <h2 className="text-3xl font-black text-slate-900 tracking-tighter">Qualificador Severino</h2>
+            <h2 className="text-3xl font-black text-slate-900 tracking-tighter">Inteligência Qualificação</h2>
           </div>
         </div>
         <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400">

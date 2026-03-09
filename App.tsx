@@ -1,6 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
+import { Session } from '@supabase/supabase-js';
 import { Layout } from './components/Layout';
+import { LoginPage } from './components/LoginPage';
 import { Dashboard } from './components/Dashboard';
 import { ClientList } from './components/ClientList';
 import { CampaignManager } from './components/CampaignManager';
@@ -9,6 +11,7 @@ import { LeadQualifier } from './components/LeadQualifier';
 import { WhatsAppManager } from './components/WhatsAppManager';
 import { Client, ViewState } from './types';
 import { analyzeSegments } from './services/geminiService';
+import { supabaseAuth } from './services/supabase';
 import {
   fetchClientsFromDB,
   saveClientsToDB,
@@ -19,6 +22,8 @@ import {
 } from './services/persistenceService';
 
 const App: React.FC = () => {
+  const [session, setSession] = useState<Session | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [currentView, setCurrentView] = useState<ViewState>('dashboard');
   const [clients, setClients] = useState<Client[]>([]);
   const [totalLeads, setTotalLeads] = useState(0);
@@ -27,6 +32,21 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [pendingQualification, setPendingQualification] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabaseAuth.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setAuthLoading(false);
+    });
+    const { data: { subscription } } = supabaseAuth.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleLogout = async () => {
+    await supabaseAuth.auth.signOut();
+  };
 
   const loadData = async (silent = false) => {
     if (!silent) setIsLoading(true);
@@ -190,9 +210,6 @@ const App: React.FC = () => {
             clients={clients}
             totalLeadsOverride={totalLeads}
             totalPendingOverride={totalPending}
-            onAnalyze={handleRunAnalysis}
-            isAnalyzing={isAnalyzing}
-            progress={progress}
           />
         );
       case 'clients':
@@ -223,12 +240,20 @@ const App: React.FC = () => {
       case 'whatsapp':
         return <WhatsAppManager />;
       default:
-        return <Dashboard clients={clients} onAnalyze={handleRunAnalysis} isAnalyzing={isAnalyzing} />;
+        return <Dashboard clients={clients} />;
     }
   };
 
+  if (authLoading) return (
+    <div className="flex h-screen items-center justify-center bg-[#F8FAFC]">
+      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+    </div>
+  );
+
+  if (!session) return <LoginPage />;
+
   return (
-    <Layout currentView={currentView} onChangeView={setCurrentView}>
+    <Layout currentView={currentView} onChangeView={setCurrentView} userEmail={session.user.email} onLogout={handleLogout}>
       {renderContent()}
     </Layout>
   );

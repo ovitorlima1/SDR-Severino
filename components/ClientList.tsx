@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { Search, Filter, Building, Plus, FileSpreadsheet, Info, MapPin, Zap, BrainCircuit, Loader2, X } from 'lucide-react';
+import { Search, Filter, Building, FileSpreadsheet, Info, MapPin, Zap, BrainCircuit, Loader2, X } from 'lucide-react';
 import { Client } from '../types';
 import * as XLSX from 'xlsx';
 
@@ -22,22 +22,32 @@ export const ClientList: React.FC<ClientListProps> = ({
   totalPending = 0
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedProfile, setSelectedProfile] = useState<string>('all');
+  const [selectedSetor, setSelectedSetor] = useState<string>('all');
+  const [selectedConsumo, setSelectedConsumo] = useState<string>('all');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Estados do Modal de Segmentação
   const [isSegmentModalOpen, setIsSegmentModalOpen] = useState(false);
   const [segmentLimit, setSegmentLimit] = useState(100);
 
-  // Usando 'profile' em vez de 'segment' para alinhar com o banco TIPO_PERFIL
-  const profiles = Array.from(new Set(clients.map(c => c.profile || 'Não Segmentado')));
+  const setores = Array.from(new Set(clients.map(c => c.classePrincipal).filter(Boolean))) as string[];
 
   const filteredClients = clients.filter(client => {
-    const matchesSearch = 
-      client.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    const matchesSearch =
+      client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (client.cnpj && client.cnpj.includes(searchTerm));
-    const matchesProfile = selectedProfile === 'all' || (client.profile || 'Não Segmentado') === selectedProfile;
-    return matchesSearch && matchesProfile;
+
+    const matchesSetor =
+      selectedSetor === 'all' ||
+      (client.classePrincipal || '').toLowerCase() === selectedSetor.toLowerCase();
+
+    const potenciaNum = parseFloat(client.potencia || '0');
+    const matchesConsumo =
+      selectedConsumo === 'all' ||
+      (selectedConsumo === 'gWh' && potenciaNum > 1000) ||
+      (selectedConsumo === 'mW'  && potenciaNum > 500);
+
+    return matchesSearch && matchesSetor && matchesConsumo;
   });
 
   const getProfileColor = (profile?: string) => {
@@ -197,7 +207,7 @@ export const ClientList: React.FC<ClientListProps> = ({
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">Carteira de Clientes</h2>
+          <h2 className="text-2xl font-bold text-slate-900">Originação de Clientes</h2>
         </div>
         <div className="flex flex-wrap gap-2">
            <button onClick={() => fileInputRef.current?.click()} className="flex items-center px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"><FileSpreadsheet size={18} className="mr-2 text-green-600" />Importar Planilha</button>
@@ -213,7 +223,6 @@ export const ClientList: React.FC<ClientListProps> = ({
               Segmentar Base
            </button>
 
-           <button className="flex items-center px-4 py-2 bg-primary text-slate-900 rounded-lg hover:bg-primary/90 transition-colors shadow-sm font-bold"><Plus size={18} className="mr-2" />Novo Cliente</button>
         </div>
       </div>
 
@@ -228,15 +237,30 @@ export const ClientList: React.FC<ClientListProps> = ({
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <div className="relative w-full md:w-64">
-          <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+        {/* Filtro Setor */}
+        <div className="relative w-full md:w-48">
+          <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
           <select
-            className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none cursor-pointer"
-            value={selectedProfile}
-            onChange={(e) => setSelectedProfile(e.target.value)}
+            className="w-full pl-9 pr-4 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none cursor-pointer"
+            value={selectedSetor}
+            onChange={(e) => setSelectedSetor(e.target.value)}
           >
-            <option value="all">Todos os Perfis</option>
-            {profiles.map(p => <option key={p} value={p}>{p}</option>)}
+            <option value="all">Todos os Setores</option>
+            {setores.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+
+        {/* Filtro Consumo Estimado */}
+        <div className="relative w-full md:w-52">
+          <Zap className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+          <select
+            className="w-full pl-9 pr-4 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-primary/50 appearance-none cursor-pointer"
+            value={selectedConsumo}
+            onChange={(e) => setSelectedConsumo(e.target.value)}
+          >
+            <option value="all">Consumo Estimado</option>
+            <option value="mW">&gt; 500 MW</option>
+            <option value="gWh">&gt; 1 GWh</option>
           </select>
         </div>
       </div>
@@ -285,13 +309,18 @@ export const ClientList: React.FC<ClientListProps> = ({
                   </td>
                   <td className="px-6 py-4">
                      <div className="flex items-center text-xs text-slate-600">
-                        <MapPin size={12} className="mr-1 text-slate-400" />
-                        {client.municipio || 'N/A'}
+                        <MapPin size={12} className="mr-1 text-slate-400 shrink-0" />
+                        <div>
+                          <div>{client.municipio || 'N/A'}</div>
+                          {client.state && (
+                            <div className="text-[10px] font-bold text-slate-400 uppercase">{client.state}</div>
+                          )}
+                        </div>
                      </div>
                   </td>
                   <td className="px-6 py-4 text-center">
                     <button onClick={() => onQualify && onQualify(client.name)} className="inline-flex items-center justify-center gap-2 px-4 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 hover:border-primary hover:text-primary transition-all shadow-sm font-bold text-[10px] uppercase">
-                      AUDITAR
+                      Qualificar 
                     </button>
                   </td>
                 </tr>
