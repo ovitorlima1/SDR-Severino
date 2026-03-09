@@ -259,29 +259,37 @@ const formatDateForDB = (inputValue: string | number | undefined): string | null
 export const saveClientsToDB = async (clients: Partial<Client>[]) => {
   const { data, error } = await supabase
     .from('clients')
-    .upsert(clients.map(c => ({
-      nome: c.name,
-      cnpj: c.cnpj || null,
-      municipio: c.municipio,
-      estado: c.state,
-      endereco: c.endereco,
-      cliente_livre: c.clienteLivre,
-      micro_gerador: c.microGerador,
-      nivel_tensao: c.nivelTensao,
-      classe_principal: c.classePrincipal,
-      subclasse: c.subclasse,
-      potencia: c.potencia,
-      tipo_tarifa: c.tipoTarifa,
-      tipo_cliente: c.tipoCliente,
-      data_de: formatDateForDB(c.dataDe),
-      data_ate: formatDateForDB(c.dataAte),
-      contrato_ativo: c.contratoAtivo,
-      tel_fixo: c.telFixo,
-      tel_movel: c.telMovel,
-      email: c.email,
-      tipo_perfil: c.profile || 'Não Segmentado',
-      cnae: c.cnae
-    })), { onConflict: 'cnpj' });
+    .upsert(clients.map(c => {
+      const payload: any = {
+        nome: c.name,
+        cnpj: c.cnpj || null,
+        municipio: c.municipio,
+        estado: c.state,
+        endereco: c.endereco,
+        cliente_livre: c.clienteLivre,
+        micro_gerador: c.microGerador,
+        nivel_tensao: c.nivelTensao,
+        classe_principal: c.classePrincipal,
+        subclasse: c.subclasse,
+        potencia: c.potencia,
+        tipo_tarifa: c.tipoTarifa,
+        tipo_cliente: c.tipoCliente,
+        data_de: formatDateForDB(c.dataDe),
+        data_ate: formatDateForDB(c.dataAte),
+        contrato_ativo: c.contratoAtivo,
+        tel_fixo: c.telFixo,
+        tel_movel: c.telMovel,
+        email: c.email,
+        cnae: c.cnae
+      };
+
+      // Só sobrescreve perfil se o dado importado tiver um perfil definido
+      if (c.profile && c.profile !== 'Não Segmentado') {
+        payload.tipo_perfil = c.profile;
+      }
+
+      return payload;
+    }), { onConflict: 'cnpj' });
 
   if (error) throw error;
   return data;
@@ -310,7 +318,14 @@ export const fetchCampaignAudienceClients = async (filters: CampaignFilters, lim
   if (filters.profile) query = query.eq('tipo_perfil', filters.profile);
   if (filters.state && filters.state !== 'all') query = query.eq('estado', filters.state);
   if (filters.category && filters.category !== 'all') query = query.eq('classe_principal', filters.category);
-  if (filters.potencia) query = query.ilike('potencia', `%${filters.potencia}%`);
+  if (filters.potencia && filters.potencia !== '0') {
+    const numValue = parseInt(filters.potencia);
+    if (!isNaN(numValue) && numValue > 0) {
+      query = query.gte('potencia', filters.potencia);
+    } else {
+      query = query.ilike('potencia', `%${filters.potencia}%`);
+    }
+  }
 
   const { data, error } = await query.limit(limit);
   if (error) return [];
@@ -323,7 +338,14 @@ export const fetchCampaignSampleClients = async (filters: CampaignFilters, limit
   if (filters.profile) query = query.eq('tipo_perfil', filters.profile);
   if (filters.state && filters.state !== 'all') query = query.eq('estado', filters.state);
   if (filters.category && filters.category !== 'all') query = query.eq('classe_principal', filters.category);
-  if (filters.potencia) query = query.ilike('potencia', `%${filters.potencia}%`);
+  if (filters.potencia && filters.potencia !== '0') {
+    const numValue = parseInt(filters.potencia);
+    if (!isNaN(numValue) && numValue > 0) {
+      query = query.gte('potencia', filters.potencia);
+    } else {
+      query = query.ilike('potencia', `%${filters.potencia}%`);
+    }
+  }
 
   const { data, error } = await query;
   if (error) return [];
@@ -336,7 +358,14 @@ export const fetchCampaignAudienceIds = async (filters: CampaignFilters, limit: 
   if (filters.profile) query = query.eq('tipo_perfil', filters.profile);
   if (filters.state && filters.state !== 'all') query = query.eq('estado', filters.state);
   if (filters.category && filters.category !== 'all') query = query.eq('classe_principal', filters.category);
-  if (filters.potencia) query = query.ilike('potencia', `%${filters.potencia}%`);
+  if (filters.potencia && filters.potencia !== '0') {
+    const numValue = parseInt(filters.potencia);
+    if (!isNaN(numValue) && numValue > 0) {
+      query = query.gte('potencia', filters.potencia);
+    } else {
+      query = query.ilike('potencia', `%${filters.potencia}%`);
+    }
+  }
 
   const { data, error } = await query.limit(limit);
   if (error) return [];
@@ -349,7 +378,14 @@ export const fetchCampaignAudienceCount = async (filters: CampaignFilters): Prom
   if (filters.profile) query = query.eq('tipo_perfil', filters.profile);
   if (filters.state && filters.state !== 'all') query = query.eq('estado', filters.state);
   if (filters.category && filters.category !== 'all') query = query.eq('classe_principal', filters.category);
-  if (filters.potencia) query = query.ilike('potencia', `%${filters.potencia}%`);
+  if (filters.potencia && filters.potencia !== '0') {
+    const numValue = parseInt(filters.potencia);
+    if (!isNaN(numValue) && numValue > 0) {
+      query = query.gte('potencia', filters.potencia);
+    } else {
+      query = query.ilike('potencia', `%${filters.potencia}%`);
+    }
+  }
 
   const { count, error } = await query;
   return error ? 0 : (count || 0);
@@ -363,7 +399,7 @@ export const createCampaign = async (campaign: Omit<Campaign, 'id' | 'createdAt'
     segment_category: campaign.segmentCategory,
     total_leads: campaign.totalLeads,
     email_subject: campaign.subject,
-    email_body: campaign.emailBody || campaign.body,
+    email_body: campaign.body || campaign.emailBody,
     status: campaign.status
   }).select().single();
 

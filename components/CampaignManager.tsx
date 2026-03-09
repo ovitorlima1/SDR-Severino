@@ -44,6 +44,16 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
 
   const states = Array.from(new Set(clients.map(c => c.state))).filter(Boolean).sort();
 
+  const maxPotencia = Math.max(
+    ...availablePotencias
+      .map(p => {
+        const match = p.match(/\d+/);
+        return match ? parseInt(match[0]) : 0;
+      })
+      .filter(p => !isNaN(p)),
+    1000 // Fallback
+  );
+
   // Carrega as categorias e perfis dinamicamente do banco
   useEffect(() => {
     const loadFilters = async () => {
@@ -109,13 +119,21 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
         potencia: filterPotencia || undefined
       }, 5);
 
+      const sampleDetails = sampleClients.map(c => ({
+        nome: c.name,
+        empresa: c.company,
+        estado: c.state,
+        classe: c.classePrincipal,
+        potencia: c.potencia
+      }));
+
       const context = {
         state: filterState === 'all' ? 'Brasil' : filterState,
         sector: filterCategory === 'all' ? 'Geral' : filterCategory,
         potential: filterPotencia || 'Médio Porte'
       };
 
-      const message = await generateCampaignMessage(selectedProfile, context, sampleClients);
+      const message = await generateCampaignMessage(selectedProfile, context, sampleDetails as any);
       setGeneratedMessage(message);
     } catch (e) {
       alert("Erro ao gerar copy Billi. Verifique sua conexão.");
@@ -261,16 +279,24 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
 
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block flex items-center gap-1">
-                  <Zap size={10} /> Potencial (Calibragem)
+                  <Zap size={10} /> Potencial (Mínimo {parseInt(filterPotencia || '0').toLocaleString()} kW)
                 </label>
-                <select
-                  className={selectClassName}
-                  value={filterPotencia}
-                  onChange={(e) => setFilterPotencia(e.target.value)}
-                >
-                  <option value="">Todas as Potências</option>
-                  {availablePotencias.map(p => <option key={p} value={p} className="text-slate-900">{p}</option>)}
-                </select>
+                <div className="space-y-3 px-1">
+                  <input
+                    type="range"
+                    min="0"
+                    max={maxPotencia}
+                    step={maxPotencia > 5000 ? 100 : 50}
+                    value={filterPotencia || '0'}
+                    onChange={(e) => setFilterPotencia(e.target.value)}
+                    className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-primary hover:accent-primary/80 transition-all shadow-inner"
+                  />
+                  <div className="flex justify-between text-[9px] font-black text-slate-400 uppercase tracking-tighter">
+                    <span>0 kW</span>
+                    <span>{(maxPotencia / 2 / 1000).toFixed(1)}k</span>
+                    <span>{(maxPotencia / 1000).toFixed(1)}k kW</span>
+                  </div>
+                </div>
               </div>
 
               <div className="pt-4 border-t border-slate-100 space-y-4">
@@ -308,7 +334,7 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
               disabled={!selectedProfile || isGenerating || dbCount === 0}
               className="w-full py-4 bg-primary text-white font-black uppercase tracking-wider text-xs flex items-center justify-center gap-2 hover:bg-primary/90 disabled:opacity-50 transition-all shadow-md rounded-lg"
             >
-              {isGenerating ? <><Wand2 className="animate-spin" size={16} /> Criando Campanhas...</> : <><Wand2 size={16} /> Gerar com IA Sênior</>}
+              {isGenerating ? <><Wand2 className="animate-spin" size={16} /> Criando Campanhas...</> : <><Wand2 size={16} /> Gerar campanha</>}
             </button>
           </div>
         </div>
@@ -418,7 +444,7 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
                       ${sendStatus === 'sent' ? 'bg-green-600 text-white' : 'bg-primary text-white hover:bg-primary/90'}
                     `}
                   >
-                    {sendStatus === 'sending' ? 'Processando...' : sendStatus === 'sent' ? <><CheckCircle size={16} /> Enviado</> : <><Send size={16} /> Agendar Disparo</>}
+                    {sendStatus === 'sending' ? 'Processando...' : sendStatus === 'sent' ? <><CheckCircle size={16} /> Enviado</> : <><Send size={16} /> Criar campanha</>}
                   </button>
                 </div>
               </div>

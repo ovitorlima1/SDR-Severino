@@ -135,8 +135,38 @@ const App: React.FC = () => {
   const handleSetClients = async (newClients: Client[]) => {
     setIsLoading(true);
     try {
-      await saveClientsToDB(newClients);
+      // Validação de duplicidade para o usuário
+      const existingCnpjs = new Set(clients.map(c => c.cnpj).filter(Boolean));
+      const duplicatesCount = newClients.filter(c => c.cnpj && existingCnpjs.has(c.cnpj)).length;
+      const totalProcessed = newClients.length;
+
+      let clientsToSave = newClients;
+      let shouldUpdate = true;
+
+      if (duplicatesCount > 0) {
+        shouldUpdate = window.confirm(
+          `${duplicatesCount} clientes já existem na base.\n\nDeseja ATUALIZAR os dados desses clientes? (Dados de contato/energia serão atualizados, mas o Perfil de IA será preservado).\n\nClique em OK para atualizar ou CANCELAR para ignorar os duplicados e subir apenas os NOVOS.`
+        );
+
+        if (!shouldUpdate) {
+          clientsToSave = newClients.filter(c => !c.cnpj || !existingCnpjs.has(c.cnpj));
+        }
+      }
+
+      const trulyNew = clientsToSave.filter(c => !c.cnpj || !existingCnpjs.has(c.cnpj)).length;
+
+      await saveClientsToDB(clientsToSave);
       await loadData();
+
+      if (duplicatesCount > 0) {
+        if (shouldUpdate) {
+          alert(`Sincronização concluída!\n- ${trulyNew} novos clientes adicionados.\n- ${duplicatesCount} clientes existentes atualizados.\n\nO perfil de segmentação dos clientes antigos foi preservado.`);
+        } else {
+          alert(`Sincronização concluída!\n- ${trulyNew} novos clientes adicionados.\n- ${duplicatesCount} duplicados foram IGNORADOS.`);
+        }
+      } else {
+        alert(`${totalProcessed} novos clientes adicionados com sucesso.`);
+      }
     } catch (e) {
       console.error(e);
       alert("Erro ao sincronizar planilha.");

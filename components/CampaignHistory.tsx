@@ -4,7 +4,8 @@ import { Clock, BarChart3, Users, Send, Loader2, PieChart as PieChartIcon, Calen
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { fetchAllCampaigns, fetchLeadsByCampaign, deleteClientFromDB } from '../services/persistenceService';
 import { Campaign, Client } from '../types';
-import { ChevronDown, ChevronUp, UserCheck, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, UserCheck, Trash2, FileSpreadsheet } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 export const CampaignHistory: React.FC = () => {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -13,6 +14,7 @@ export const CampaignHistory: React.FC = () => {
   const [campaignLeads, setCampaignLeads] = useState<Record<string, Client[]>>({});
   const [isLoadingLeads, setIsLoadingLeads] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState<string | null>(null);
 
   useEffect(() => {
     const loadCampaigns = async () => {
@@ -72,6 +74,58 @@ export const CampaignHistory: React.FC = () => {
       alert("Erro ao remover cliente.");
     } finally {
       setIsDeleting(null);
+    }
+  };
+
+  const handleDownloadExcel = async (campaign: Campaign) => {
+    setIsExporting(campaign.id);
+    try {
+      const leads = await fetchLeadsByCampaign(campaign.id);
+      
+      // Tenta extrair as mensagens do body concatenado (formato do CampaignManager)
+      // O CampaignManager salva como: Email: ... \n\n WhatsApp: ... \n\n LinkedIn: ...
+      const body = campaign.body || '';
+      
+      const extractSection = (text: string, startMarker: string, endMarker?: string) => {
+        const startIndex = text.indexOf(startMarker);
+        if (startIndex === -1) return '';
+        
+        const contentStart = startIndex + startMarker.length;
+        const endIndex = endMarker ? text.indexOf(endMarker, contentStart) : text.length;
+        
+        return text.substring(contentStart, endIndex).trim();
+      };
+
+      const emailBody = campaign.emailBody || extractSection(body, 'Email:', '\n\nWhatsApp:');
+      const whatsappBody = campaign.whatsappBody || extractSection(body, 'WhatsApp:', '\n\nLinkedIn:');
+      const linkedinBody = campaign.linkedinBody || extractSection(body, 'LinkedIn:');
+
+      const exportData = leads.map(c => ({
+        Nome: c.name,
+        CNPJ: c.cnpj || '',
+        Telefone: c.telMovel || c.telFixo || '',
+        Email: c.email || '',
+        Assunto_Email: campaign.subject || '',
+        Corpo_Email: emailBody,
+        WhatsApp: whatsappBody,
+        LinkedIn: linkedinBody,
+        Estado: c.state || '',
+        Categoria: c.classePrincipal || '',
+        Potencia: c.potencia || ''
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Campanha_Billi_Histórico");
+
+      const fileName = `Billi_ReDownload_${campaign.segmentProfile || 'Campanha'}_${new Date(campaign.createdAt).toISOString().slice(0, 10)}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+
+    } catch (error) {
+      console.error("Erro ao exportar planilha:", error);
+      alert("Erro ao gerar o download do Excel.");
+    } finally {
+      setIsExporting(null);
     }
   };
 
@@ -229,6 +283,7 @@ export const CampaignHistory: React.FC = () => {
                 <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Região/Filtro</th>
                 <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">Leads</th>
                 <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">Status</th>
+                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -266,6 +321,23 @@ export const CampaignHistory: React.FC = () => {
                         {camp.status === 'Enviada' && <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>}
                         {camp.status}
                       </span>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDownloadExcel(camp);
+                        }}
+                        disabled={isExporting === camp.id}
+                        className="p-2 text-slate-400 hover:text-primary hover:bg-primary/5 rounded-lg transition-all"
+                        title="Baixar planilha desta campanha"
+                      >
+                        {isExporting === camp.id ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                          <FileSpreadsheet size={16} />
+                        )}
+                      </button>
                     </td>
                   </tr>
 

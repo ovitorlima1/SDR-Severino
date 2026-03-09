@@ -117,7 +117,9 @@ export const generateCampaignMessage = async (
 ): Promise<MessageTemplate> => {
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
-  const sampleData = clients.slice(0, 3).map(c => `${c.name} (${c.company})`).join(', ');
+  const sampleData = Array.isArray(clients)
+    ? clients.slice(0, 5).map(c => `${c.name || 'Empresa'} (${c.state || 'Região'} - ${c.classePrincipal || 'Setor'} - ${c.potencia || 'Porte'})`).join('; ')
+    : 'Diversas empresas do setor';
 
   const schema = {
     type: Type.OBJECT,
@@ -143,16 +145,19 @@ export const generateCampaignMessage = async (
   - Potencial: ${contextInfo.potential}
   - Exemplos de Alvos: ${sampleData}
   
-  REGRAS DE NEGÓCIO:
-  1. Mencione que a Billi entende o setor de ${contextInfo.sector} em ${contextInfo.state}.
-  2. Calibre pelo Potencial: Se for Alta Voltagem/Grande Porte, use "Escala e Capex". Se for Médio, use "Fôlego e Fluxo".
-  3. Adapte o Tom ao Perfil:
-     - Arquiteto Financeiro: Arrojado, foco em eficiência, engenharia financeira e margem.
-     - Pagador: Sério, foco em segurança, proteção do caixa e honrar compromissos.
-     - Oportunista: Ágil, foco em liquidez rápida e timing de mercado.
-     - Gestor: Profissional, foco em controle de processos e organização.
+  REGRAS DE IMPACTO:
+  1. CONTEXTO REGIONAL: Use o fato de estarem em ${contextInfo.state} para criar proximidade.
+  2. CONTEXTO SETORIAL: Fale a língua de quem atua no setor ${contextInfo.sector}.
+  3. CALIBRAGEM DE POTÊNCIA: Se o potencial for ${contextInfo.potential}, adapte a tese de investimento (ex: Alta Voltagem foca em economia de escala, Baixa em eficiência operacional).
+  4. ALVOS REAIS: Use os exemplos fornecidos (${sampleData}) para nortear o tom das mensagens, tornando-as extremamente específicas para esse grupo.
   
-  Gere 1 opção para cada canal. Assine como 'Time Billi Capital'.`;
+  ADAPTAÇÃO POR PERFIL (${profile}):
+  - Arquiteto Financeiro: Mensagens focadas em estrutura de capital, ROI e eficiência tributária/energética.
+  - Pagador: Foco em estabilidade, redução de custos fixos e segurança financeira.
+  - Oportunista: Foco em ganhos rápidos, arbitragem e vantagem competitiva.
+  - Gestor: Foco em conformidade, controle de custos e governança.
+  
+  Gere uma abordagem de alto impacto para cada canal. Assine como 'Time Billi Capital'.`;
 
   return withRetry(async () => {
     try {
