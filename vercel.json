@@ -1,0 +1,8 @@
+{
+    "rewrites": [
+        {
+            "source": "/kommo-api/:path*",
+            "destination": "/api/kommo?path=:path*"
+        }
+    ]
+}

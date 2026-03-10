@@ -8,7 +8,7 @@ import { ClientList } from './components/ClientList';
 import { CampaignManager } from './components/CampaignManager';
 import { CampaignHistory } from './components/CampaignHistory';
 import { LeadQualifier } from './components/LeadQualifier';
-import { WhatsAppManager } from './components/WhatsAppManager';
+import { ConversionFunnel } from './components/ConversionFunnel';
 import { Client, ViewState } from './types';
 import { analyzeSegments } from './services/geminiService';
 import { supabaseAuth } from './services/supabase';
@@ -238,7 +238,7 @@ const App: React.FC = () => {
       case 'history':
         return <CampaignHistory />;
       case 'whatsapp':
-        return <WhatsAppManager />;
+        return <ConversionFunnel />;
       default:
         return <Dashboard clients={clients} />;
     }
