@@ -31,6 +31,10 @@ const mapDBToClient = (dbData: any): Client => ({
   telMovel: dbData.tel_movel,
   email: dbData.email || '',
 
+  // Originação
+  sourceBatch: dbData.source_batch,
+  isDeleted: dbData.is_deleted,
+ 
   // Inteligência
   cnae: dbData.cnae,
   profile: dbData.tipo_perfil,
@@ -103,6 +107,7 @@ export const fetchClientsFromDB = async (): Promise<Client[]> => {
   const { data, error } = await supabase
     .from('clients')
     .select('*')
+    .eq('is_deleted', false) // Só traz os não excluídos
     .order('created_at', { ascending: false })
     .limit(100000);
 
@@ -111,7 +116,7 @@ export const fetchClientsFromDB = async (): Promise<Client[]> => {
 };
 
 export const fetchTotalClientsCount = async (): Promise<number> => {
-  const { count, error } = await supabase.from('clients').select('*', { count: 'exact', head: true });
+  const { count, error } = await supabase.from('clients').select('*', { count: 'exact', head: true }).eq('is_deleted', false);
   return error ? 0 : (count || 0);
 };
 
@@ -280,7 +285,9 @@ export const saveClientsToDB = async (clients: Partial<Client>[]) => {
         tel_fixo: c.telFixo,
         tel_movel: c.telMovel,
         email: c.email,
-        cnae: c.cnae
+        cnae: c.cnae,
+        source_batch: c.sourceBatch,
+        is_deleted: false
       };
 
       // Só sobrescreve perfil se o dado importado tiver um perfil definido
@@ -292,6 +299,19 @@ export const saveClientsToDB = async (clients: Partial<Client>[]) => {
     }), { onConflict: 'cnpj' });
 
   if (error) throw error;
+  
+  // Registrar histórico se houver um nome de lote
+  const batchName = clients[0]?.sourceBatch;
+  if (batchName && clients.length > 0) {
+      // Simplificado: Supomos que o batchName é consistente
+      await supabase.from('import_history').insert({
+          filename: batchName,
+          total_rows: clients.length,
+          new_leads: clients.length, // Placeholder, idealmente compararíamos
+          updated_leads: 0
+      });
+  }
+
   return data;
 };
 
@@ -567,5 +587,61 @@ export const fetchLeadsInCampaignsCount = async (): Promise<number> => {
     .select('client_id');
   if (error || !data) return 0;
   return new Set(data.map((d: any) => d.client_id)).size;
+};
+
+/**
+ * ORIGINAÇÃO E KPIS DE BASE
+ */
+
+export const fetchOriginationStats = async (): Promise<any> => {
+    const { data, error } = await supabase.rpc('get_origination_stats');
+    if (error) return { totalBatches: 0, totalImported: 0, totalDeleted: 0, enrichmentRate: 0 };
+    return {
+        totalBatches: data[0].total_batches,
+        totalImported: data[0].total_imported,
+        totalDeleted: data[0].total_deleted,
+        enrichmentRate: data[0].enrichment_rate
+    };
+};
+
+export const fetchImportHistory = async (): Promise<any[]> => {
+    const { data, error } = await supabase
+        .from('import_history')
+        .select('*')
+        .order('created_at', { ascending: false });
+    
+    if (error) return [];
+    return data.map(d => ({
+        id: d.id,
+        filename: d.filename,
+        totalRows: d.total_rows,
+        newLeads: d.new_leads,
+        updatedLeads: d.updated_leads,
+        createdAt: d.created_at
+    }));
+};
+
+export const deleteClientsByBatch = async (batchName: string) => {
+    // 1. Logar exclusão (conforme o schema do usuário)
+    const { data: clientsToLog } = await supabase
+        .from('clients')
+        .select('name, source_batch')
+        .eq('source_batch', batchName);
+    
+    if (clientsToLog && clientsToLog.length > 0) {
+        const logs = clientsToLog.map(c => ({
+            client_name: c.name,
+            source_batch: c.source_batch
+        }));
+        await supabase.from('deletion_logs').insert(logs);
+    }
+
+    // 2. Marcar como excluído (Soft Delete)
+    const { error } = await supabase
+        .from('clients')
+        .update({ is_deleted: true })
+        .eq('source_batch', batchName);
+
+    if (error) throw error;
 };
 

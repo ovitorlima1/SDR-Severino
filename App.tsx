@@ -18,8 +18,11 @@ import {
   updateClientAIResult,
   fetchTotalClientsCount,
   fetchPendingClients,
-  fetchTotalPendingCount
+  fetchTotalPendingCount,
+  fetchOriginationStats,
+  deleteClientsByBatch
 } from './services/persistenceService';
+import { OriginationStats } from './types';
 
 const App: React.FC = () => {
   const [session, setSession] = useState<Session | null>(null);
@@ -32,6 +35,12 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [pendingQualification, setPendingQualification] = useState<string | null>(null);
+  const [originationStats, setOriginationStats] = useState<OriginationStats>({
+    totalBatches: 0,
+    totalImported: 0,
+    totalDeleted: 0,
+    enrichmentRate: 0
+  });
 
   useEffect(() => {
     supabaseAuth.auth.getSession().then(({ data: { session } }) => {
@@ -54,10 +63,12 @@ const App: React.FC = () => {
       const dbClients = await fetchClientsFromDB();
       const actualTotal = await fetchTotalClientsCount();
       const pendingTotal = await fetchTotalPendingCount();
-
+      const stats = await fetchOriginationStats();
+ 
       setClients(dbClients);
       setTotalLeads(actualTotal);
       setTotalPending(pendingTotal);
+      setOriginationStats(stats);
     } catch (e) {
       console.error("Falha na conexão inicial:", e);
     } finally {
@@ -224,6 +235,11 @@ const App: React.FC = () => {
             onAnalyze={handleRunAnalysis}
             isAnalyzing={isAnalyzing}
             totalPending={totalPending}
+            originationStats={originationStats}
+            onDeleteBatch={async (batchName) => {
+              await deleteClientsByBatch(batchName);
+              await loadData();
+            }}
           />
         );
       case 'qualifier':

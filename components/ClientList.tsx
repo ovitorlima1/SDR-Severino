@@ -1,7 +1,8 @@
 
 import React, { useState, useRef } from 'react';
-import { Search, Filter, Building, FileSpreadsheet, Info, MapPin, Zap, BrainCircuit, Loader2, X } from 'lucide-react';
-import { Client } from '../types';
+import { Search, Filter, Building, FileSpreadsheet, Info, MapPin, Zap, BrainCircuit, Loader2, X, Database, Trash2, TrendingUp, History } from 'lucide-react';
+import { Client, OriginationStats, ImportHistory } from '../types';
+import { fetchImportHistory } from '../services/persistenceService';
 import * as XLSX from 'xlsx';
 
 interface ClientListProps {
@@ -11,6 +12,8 @@ interface ClientListProps {
   onAnalyze: (limit: number) => void;
   isAnalyzing: boolean;
   totalPending?: number;
+  originationStats?: OriginationStats;
+  onDeleteBatch?: (batchName: string) => Promise<void>;
 }
 
 export const ClientList: React.FC<ClientListProps> = ({ 
@@ -19,7 +22,9 @@ export const ClientList: React.FC<ClientListProps> = ({
   onQualify,
   onAnalyze,
   isAnalyzing,
-  totalPending = 0
+  totalPending = 0,
+  originationStats,
+  onDeleteBatch
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSetor, setSelectedSetor] = useState<string>('all');
@@ -29,6 +34,11 @@ export const ClientList: React.FC<ClientListProps> = ({
   // Estados do Modal de Segmentação
   const [isSegmentModalOpen, setIsSegmentModalOpen] = useState(false);
   const [segmentLimit, setSegmentLimit] = useState(100);
+  
+  // Estados do Gerenciamento de Bases
+  const [isBasesModalOpen, setIsBasesModalOpen] = useState(false);
+  const [importHistory, setImportHistory] = useState<ImportHistory[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   const setores = Array.from(new Set(clients.map(c => c.classePrincipal).filter(Boolean))) as string[];
 
@@ -63,6 +73,7 @@ export const ClientList: React.FC<ClientListProps> = ({
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const batchName = file.name;
 
     const reader = new FileReader();
     reader.onload = (evt) => {
@@ -127,7 +138,8 @@ export const ClientList: React.FC<ClientListProps> = ({
             employees: 0,
             segment: c.profile || 'Não Segmentado',
             category: 'Não Definido',
-            state: c.municipio ? c.municipio.split('-').pop()?.trim() || '' : ''
+            state: c.municipio ? c.municipio.split('-').pop()?.trim() || '' : '',
+            sourceBatch: batchName
         })) as Client[];
         
         setClients(fullClients);
@@ -140,6 +152,29 @@ export const ClientList: React.FC<ClientListProps> = ({
   const handleStartSegmentation = () => {
     onAnalyze(segmentLimit);
     setIsSegmentModalOpen(false);
+  };
+
+  const handleOpenBasesModal = async () => {
+    setIsBasesModalOpen(true);
+    setIsLoadingHistory(true);
+    try {
+        const history = await fetchImportHistory();
+        setImportHistory(history);
+    } catch (e) {
+        console.error(e);
+    } finally {
+        setIsLoadingHistory(false);
+    }
+  };
+
+  const handleDeleteBatch = async (batchName: string) => {
+      if (confirm(`Tem certeza que deseja excluir todos os clientes da base "${batchName}"? Esta ação não pode ser desfeita.`)) {
+          if (onDeleteBatch) {
+              await onDeleteBatch(batchName);
+              // Atualiza histórico localmente
+              setImportHistory(prev => prev.filter(h => h.filename !== batchName));
+          }
+      }
   };
 
   return (
@@ -205,12 +240,102 @@ export const ClientList: React.FC<ClientListProps> = ({
         </div>
       )}
 
+      {/* Modal de Gerenciamento de Bases */}
+      {isBasesModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-none border-2 border-black shadow-2xl w-full max-w-2xl p-8 animate-in fade-in zoom-in duration-200">
+             <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-black text-black flex items-center gap-2 uppercase tracking-tighter">
+                  <History className="text-primary" /> Histórico de Importações
+                </h3>
+                <button onClick={() => setIsBasesModalOpen(false)} className="text-gray-400 hover:text-black">
+                  <X size={24} />
+                </button>
+             </div>
+
+             <div className="max-h-[400px] overflow-y-auto">
+                {isLoadingHistory ? (
+                    <div className="flex justify-center py-10"><Loader2 className="animate-spin text-primary" /></div>
+                ) : importHistory.length === 0 ? (
+                    <div className="text-center py-10 text-gray-400 font-bold uppercase text-xs">Nenhuma base importada recentemente.</div>
+                ) : (
+                    <table className="w-full text-left">
+                        <thead className="border-b-2 border-black">
+                            <tr>
+                                <th className="py-3 text-[10px] font-black text-gray-400 uppercase">Arquivo</th>
+                                <th className="py-3 text-[10px] font-black text-gray-400 uppercase text-center">Registros</th>
+                                <th className="py-3 text-[10px] font-black text-gray-400 uppercase text-center">Data</th>
+                                <th className="py-3 text-[10px] font-black text-gray-400 uppercase text-right">Ação</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {importHistory.map((h) => (
+                                <tr key={h.id} className="hover:bg-gray-50 group">
+                                    <td className="py-4">
+                                        <div className="font-bold text-sm text-black truncate max-w-[200px]">{h.filename}</div>
+                                    </td>
+                                    <td className="py-4 text-center font-mono text-xs">{h.totalRows}</td>
+                                    <td className="py-4 text-center text-[10px] text-gray-500 font-bold">
+                                        {new Date(h.createdAt).toLocaleDateString('pt-BR')}
+                                    </td>
+                                    <td className="py-4 text-right">
+                                        <button 
+                                            onClick={() => handleDeleteBatch(h.filename)}
+                                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                            title="Excluir Base"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                )}
+             </div>
+          </div>
+        </div>
+      )}
+
+      {/* KPIs de Originação */}
+      {originationStats && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-2">
+           <div className="bg-white p-4 border-b-4 border-primary shadow-sm">
+                <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+                    <Database size={10} /> Bancos Importados
+                </div>
+                <div className="text-2xl font-black text-black">{originationStats.totalBatches}</div>
+           </div>
+           <div className="bg-white p-4 border-b-4 border-secondary shadow-sm">
+                <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+                    <TrendingUp size={10} /> Total Originações
+                </div>
+                <div className="text-2xl font-black text-black">{originationStats.totalImported.toLocaleString()}</div>
+           </div>
+           <div className="bg-white p-4 border-b-4 border-red-500 shadow-sm">
+                <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+                    <Trash2 size={10} /> Registros Excluídos
+                </div>
+                <div className="text-2xl font-black text-black">{originationStats.totalDeleted.toLocaleString()}</div>
+           </div>
+           <div className="bg-white p-4 border-b-4 border-purple-500 shadow-sm">
+                <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+                    <BrainCircuit size={10} /> Taxa Enriquecimento
+                </div>
+                <div className="text-2xl font-black text-black">{originationStats.enrichmentRate.toFixed(1)}%</div>
+           </div>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Originação de Clientes</h2>
         </div>
         <div className="flex flex-wrap gap-2">
-           <button onClick={() => fileInputRef.current?.click()} className="flex items-center px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"><FileSpreadsheet size={18} className="mr-2 text-green-600" />Importar Planilha</button>
+           <button onClick={handleOpenBasesModal} className="flex items-center px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition-colors shadow-sm font-bold border border-slate-700">
+              <History size={18} className="mr-2 text-primary" /> Gerenciar Bases
+           </button>
+           <button onClick={() => fileInputRef.current?.click()} className="flex items-center px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors shadow-sm font-bold"><FileSpreadsheet size={18} className="mr-2 text-green-600" />Importar Planilha</button>
            <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".xlsx, .xls, .csv" className="hidden" />
            
            {/* Botão de Segmentação */}

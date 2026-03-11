@@ -37,6 +37,26 @@ export interface Client {
   profile?: string; // Mapeado de 'tipo_perfil'
   aiRationale?: string;
   tariffType?: string; // Alias para compatibilidade visual
+  
+  // Originação
+  sourceBatch?: string;
+  isDeleted?: boolean;
+}
+
+export interface ImportHistory {
+  id: string;
+  filename: string;
+  totalRows: number;
+  newLeads: number;
+  updatedLeads: number;
+  createdAt: string;
+}
+
+export interface OriginationStats {
+  totalBatches: number;
+  totalImported: number;
+  totalDeleted: number;
+  enrichmentRate: number;
 }
 
 export interface SegmentAnalysis {
