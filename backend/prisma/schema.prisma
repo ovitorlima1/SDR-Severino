@@ -1,0 +1,123 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Client {
+  id              String    @id @default(uuid())
+  cnpj            String?   @unique
+  nome            String
+  municipio       String?
+  estado          String?
+  endereco        String?
+  cliente_livre   String?
+  micro_gerador   String?
+  nivel_tensao    String?
+  classe_principal String?
+  subclasse       String?
+  potencia        String?
+  tipo_tarifa     String?
+  tipo_cliente    String?
+  data_de         String?
+  data_ate        String?
+  contrato_ativo  String?
+  tel_fixo        String?
+  tel_movel       String?
+  email           String?
+  cnae            String?
+  tipo_perfil     String?
+  ai_rationale    String?
+  source_batch    String?
+  is_deleted      Boolean   @default(false)
+  lat             Float?
+  lng             Float?
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  campaign_leads  CampaignLead[]
+  deletion_logs   DeletionLog[]
+
+  @@map("clients")
+}
+
+model Campaign {
+  id               String    @id @default(uuid())
+  name             String
+  segment_profile  String?
+  segment_region   String?
+  segment_category String?
+  total_leads      Int       @default(0)
+  email_subject    String?
+  email_body       String?
+  whatsapp_body    String?
+  linkedin_body    String?
+  status           String    @default("Agendada")
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+
+  campaign_leads   CampaignLead[]
+
+  @@map("campaigns")
+}
+
+model CampaignLead {
+  id          String   @id @default(uuid())
+  campaign_id String
+  client_id   String
+  status      String   @default("pendente")
+  created_at  DateTime @default(now())
+
+  campaign    Campaign @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
+  client      Client   @relation(fields: [client_id], references: [id], onDelete: Cascade)
+
+  @@map("campaign_leads")
+}
+
+model ImportHistory {
+  id           String   @id @default(uuid())
+  filename     String
+  total_rows   Int      @default(0)
+  new_leads    Int      @default(0)
+  updated_leads Int     @default(0)
+  created_at   DateTime @default(now())
+
+  @@map("import_history")
+}
+
+model WhatsAppNumber {
+  id                String   @id @default(uuid())
+  phone_number      String
+  friendly_name     String
+  status            String   @default("disponivel")
+  verification_code String?
+  created_at        DateTime @default(now())
+
+  @@map("whatsapp_numbers")
+}
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  password_hash String
+  name          String
+  role          String   @default("USER")
+  created_at    DateTime @default(now())
+
+  @@map("users")
+}
+
+model DeletionLog {
+  id           String   @id @default(uuid())
+  client_name  String?
+  source_batch String?
+  client_id    String?
+  created_at   DateTime @default(now())
+
+  client       Client?  @relation(fields: [client_id], references: [id])
+
+  @@map("deletion_logs")
+}
