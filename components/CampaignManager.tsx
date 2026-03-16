@@ -453,7 +453,7 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
             <div className="bg-white border-2 border-dashed border-slate-200 h-full flex flex-col items-center justify-center p-12 text-center text-slate-400 rounded-xl">
               <div className="p-6 bg-slate-50 rounded-full shadow-sm mb-6"><Database size={48} className="text-slate-300" /></div>
               <h3 className="text-2xl font-black text-slate-800 mb-2 tracking-tight">Estratégia Billi Capital</h3>
-              <p className="max-w-md mb-6 font-medium">Preencha o perfil e o potencial da carga ao lado. O Severino irá gerar 3 abordagens personalizadas (E-mail, WhatsApp e LinkedIn) com foco em liquidez estratégica.</p>
+              <p className="max-w-md mb-6 font-medium">Preencha o perfil e o potencial da carga ao lado. O Sev Power irá gerar 3 abordagens personalizadas (E-mail, WhatsApp e LinkedIn) com foco em liquidez estratégica.</p>
               {isLoadingCount && (
                 <div className="flex items-center gap-2 text-slate-700 font-bold text-xs bg-slate-100 px-6 py-3 uppercase tracking-wider rounded-full">
                   <Loader2 className="animate-spin" size={14} /> Consultando base Supabase...

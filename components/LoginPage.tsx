@@ -52,9 +52,8 @@ export const LoginPage: React.FC = () => {
       <div className="w-full max-w-md bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
         <div className="mb-8 text-center">
           <div className="flex items-center justify-center mb-4">
-            <span className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center text-white text-2xl font-black shadow-md shadow-primary/20">B</span>
+            <img src="/sevpower-logo.png" alt="Sev Power" className="h-32 object-contain" />
           </div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tighter">Severino</h1>
           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Intelligence System</p>
         </div>
 

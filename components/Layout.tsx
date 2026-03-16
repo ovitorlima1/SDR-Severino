@@ -36,10 +36,9 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentView, onChangeV
       {/* Sidebar - Desktop (Clean White) */}
       <aside className="hidden md:flex flex-col w-72 bg-white border-r border-slate-200 relative shadow-sm z-10">
         <div className="p-8 pb-6">
-          <h1 className="text-2xl font-black text-slate-900 flex items-center tracking-tighter">
-            <span className="w-10 h-10 bg-primary rounded-xl mr-3 flex items-center justify-center text-white text-xl shadow-md shadow-primary/20">S</span>
-            Severino
-          </h1>
+          <div className="flex items-center">
+            <img src="/sevpower-logo.png" alt="Sev Power" className="h-16 object-contain" />
+          </div>
           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-2 pl-1">Intelligence System</p>
         </div>
         
@@ -80,10 +79,9 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentView, onChangeV
 
         {/* Mobile Header (White) */}
         <header className="md:hidden flex items-center justify-between p-4 bg-white text-slate-900 border-b border-slate-200 shadow-sm z-20">
-          <h1 className="font-bold text-lg flex items-center gap-2">
-             <span className="w-6 h-6 bg-primary rounded flex items-center justify-center text-white text-xs font-black">S</span>
-             Severino
-          </h1>
+          <div className="flex items-center">
+            <img src="/sevpower-logo.png" alt="Sev Power" className="h-7 object-contain" />
+          </div>
           <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-slate-600">
             <Menu size={24} />
           </button>
