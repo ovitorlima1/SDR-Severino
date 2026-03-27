@@ -7,6 +7,8 @@ import { CampaignManager } from './components/CampaignManager';
 import { CampaignHistory } from './components/CampaignHistory';
 import { LeadQualifier } from './components/LeadQualifier';
 import { ConversionFunnel } from './components/ConversionFunnel';
+import { LeadAnalysis } from './components/LeadAnalysis';
+import { Conversations } from './components/Conversations';
 import { Client, ViewState } from './types';
 import { analyzeSegments } from './services/geminiService';
 import {
@@ -235,6 +237,10 @@ const App: React.FC = () => {
         return <CampaignHistory />;
       case 'whatsapp':
         return <ConversionFunnel />;
+      case 'lead-analysis':
+        return <LeadAnalysis />;
+      case 'conversations':
+        return <Conversations />;
       default:
         return <Dashboard clients={clients} />;
     }

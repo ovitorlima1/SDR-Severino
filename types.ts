@@ -140,4 +140,79 @@ export interface WhatsAppNumber {
   createdAt: string;
 }
 
-export type ViewState = 'dashboard' | 'clients' | 'campaigns' | 'qualifier' | 'history' | 'whatsapp';
+export interface KommoLead {
+  id: number;
+  name: string;
+  status_id: number;
+  pipeline_id: number;
+  price: number;
+  created_at: number;
+  updated_at: number;
+  score?: number;
+}
+
+export interface KommoStage {
+  id: number;
+  name: string;
+  color: string;
+  pipeline_id: number;
+  pipeline_name: string;
+}
+
+export interface KommoNote {
+  id: number;
+  lead_id: number;
+  note_type: string;
+  params: {
+    text?: string;
+    duration?: number;
+    phone?: string;
+  };
+  created_at: number;
+  updated_at: number;
+  created_by: number;
+}
+
+export type SentimentLabel = 'positivo' | 'negativo' | 'neutro';
+
+export interface LeadSentimentAnalysis {
+  leadId: number;
+  leadName: string;
+  stageName: string;
+  sentiment: SentimentLabel;
+  confidence: number;
+  keyTopics: string[];
+  summary: string;
+  noteCount: number;
+  analyzedAt: string;
+}
+
+export interface InactiveLead {
+  lead: KommoLead;
+  stageName: string;
+  stageColor: string;
+  pipelineName: string;
+  daysSinceUpdate: number;
+  pipelineValue: number;
+}
+
+export type ViewState = 'dashboard' | 'clients' | 'campaigns' | 'qualifier' | 'history' | 'whatsapp' | 'lead-analysis' | 'conversations' | 'active-chats';
+
+export interface KommoTalk {
+  talk_id: number;
+  entity_id: number;
+  contact_id: number;
+  chat_id: string;
+  updated_at: number;
+  created_at: number;
+  status?: string;
+  origin?: string;
+}
+
+export interface ConversationEvent {
+  id: string;
+  source: 'note' | 'talk';
+  note_type: string;
+  displayText: string;
+  created_at: number;
+}

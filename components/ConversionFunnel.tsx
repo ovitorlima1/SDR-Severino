@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Users, UserCheck, Trophy, XCircle, TrendingUp, DollarSign, Loader2, AlertCircle } from 'lucide-react';
-import { fetchKommoLeads, fetchKommoStages, KommoLead, KommoStage } from '../services/kommoService';
+import { fetchKommoLeads, fetchKommoStages, fetchLastLeadNote, getNoteDisplayText, KommoLead, KommoStage } from '../services/kommoService';
 
 const WON_STATUS = 142;
 const LOST_STATUS = 143;
@@ -31,6 +31,7 @@ export const ConversionFunnel: React.FC = () => {
   const [stages, setStages] = useState<KommoStage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastNotes, setLastNotes] = useState<Record<number, string>>({});
 
   useEffect(() => {
     const load = async () => {
@@ -48,6 +49,27 @@ export const ConversionFunnel: React.FC = () => {
     };
     load();
   }, []);
+
+  // Load last notes for recent leads in background (must be before early returns - Rules of Hooks)
+  useEffect(() => {
+    if (!leads.length) return;
+    const recent = [...leads].sort((a, b) => b.created_at - a.created_at).slice(0, 15);
+    let cancelled = false;
+    (async () => {
+      for (const lead of recent) {
+        if (cancelled) break;
+        try {
+          const note = await fetchLastLeadNote(lead.id);
+          const text = note ? getNoteDisplayText(note) : 'Sem mensagens';
+          setLastNotes(prev => ({ ...prev, [lead.id]: text }));
+        } catch {
+          setLastNotes(prev => ({ ...prev, [lead.id]: 'Sem mensagens' }));
+        }
+        await new Promise(r => setTimeout(r, 300));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [leads]);
 
   if (loading) return (
     <div className="flex items-center justify-center h-64 text-slate-400">
@@ -81,6 +103,12 @@ export const ConversionFunnel: React.FC = () => {
     );
   }
 
+  // Recent leads (last 15 by created_at desc)
+  const stageById = Object.fromEntries(stages.map(s => [s.id, s]));
+  const recentLeads = [...leads]
+    .sort((a, b) => b.created_at - a.created_at)
+    .slice(0, 15);
+
   // KPI calculations
   const total = leads.length;
   const won = leads.filter(l => l.status_id === WON_STATUS).length;
@@ -104,12 +132,6 @@ export const ConversionFunnel: React.FC = () => {
   const stageRows = Object.values(stageMap)
     .filter(r => r.count > 0)
     .sort((a, b) => b.count - a.count);
-
-  // Recent leads (last 15 by created_at desc)
-  const stageById = Object.fromEntries(stages.map(s => [s.id, s]));
-  const recentLeads = [...leads]
-    .sort((a, b) => b.created_at - a.created_at)
-    .slice(0, 15);
 
   return (
     <div className="space-y-8 p-1">
@@ -240,10 +262,11 @@ export const ConversionFunnel: React.FC = () => {
                   const isLost = lead.status_id === LOST_STATUS;
                   const stageName = isWon ? 'Ganho' : isLost ? 'Perdido' : (stage?.name ?? 'Desconhecida');
                   const stageColor = isWon ? '#10b981' : isLost ? '#ef4444' : (stage?.color ?? '#94a3b8');
+                  const lastMsg = lastNotes[lead.id];
                   return (
                     <tr key={lead.id} className="hover:bg-slate-50/60 transition-colors">
-                      <td className="px-6 py-3 font-medium text-slate-700 max-w-[220px] truncate">
-                        {lead.name || `Lead #${lead.id}`}
+                      <td className="px-6 py-3 max-w-[260px]">
+                        <p className="font-medium text-slate-700 truncate">{lead.name || `Lead #${lead.id}`}</p>
                       </td>
                       <td className="px-6 py-3">
                         <span className="flex items-center gap-1.5">
