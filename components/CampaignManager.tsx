@@ -26,6 +26,8 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
   const [filterState, setFilterState] = useState<string>('all');
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterPotencia, setFilterPotencia] = useState<string>('');
+  const [filterSourceBatch, setFilterSourceBatch] = useState<string>('all');
+  const [campaignDate, setCampaignDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [activeChannel, setActiveChannel] = useState<Channel>('email');
 
   // Estados para filtros carregados do banco
@@ -43,6 +45,7 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
   const [isExporting, setIsExporting] = useState(false);
 
   const states = Array.from(new Set(clients.map(c => c.state))).filter(Boolean).sort();
+  const availableBatches = Array.from(new Set(clients.filter(c => !c.isDeleted && c.sourceBatch).map(c => c.sourceBatch!))).sort();
 
   const maxPotencia = Math.max(
     ...availablePotencias
@@ -77,6 +80,37 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
     loadFilters();
   }, []);
 
+  // Quando uma base é selecionada, auto-preenche filtros e restringe dropdown de perfis
+  useEffect(() => {
+    if (filterSourceBatch === 'all') {
+      // Restaura todos os perfis disponíveis ao voltar para "Todas as Bases"
+      const loadProfiles = async () => {
+        const profilesData = await fetchProfileDistribution();
+        const names = profilesData
+          .map(p => p.name)
+          .filter(n => n !== 'Não Segmentado' && n !== 'Não Analisado');
+        setAvailableProfiles(names);
+      };
+      loadProfiles();
+      return;
+    }
+
+    const batchClients = clients.filter(c => c.sourceBatch === filterSourceBatch && !c.isDeleted);
+    if (batchClients.length === 0) return;
+
+    const uniqueStates    = Array.from(new Set(batchClients.map(c => c.state).filter(Boolean)));
+    const uniqueProfiles  = Array.from(new Set(batchClients.map(c => c.profile).filter(Boolean)));
+    const uniqueCategories = Array.from(new Set(batchClients.map(c => c.classePrincipal).filter(Boolean)));
+
+    // Restringe o dropdown de perfis aos perfis dessa base
+    setAvailableProfiles(uniqueProfiles);
+
+    // Auto-seleciona se só houver 1 valor único, senão limpa para o usuário escolher
+    setFilterState(uniqueStates.length === 1 ? uniqueStates[0] : 'all');
+    setSelectedProfile(uniqueProfiles.length === 1 ? uniqueProfiles[0] : '');
+    setFilterCategory(uniqueCategories.length === 1 ? uniqueCategories[0] : 'all');
+  }, [filterSourceBatch, clients]);
+
   useEffect(() => {
     let isActive = true;
 
@@ -87,7 +121,8 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
           profile: selectedProfile || undefined,
           state: filterState === 'all' ? undefined : filterState,
           category: filterCategory === 'all' ? undefined : filterCategory,
-          potencia: filterPotencia || undefined
+          potencia: filterPotencia || undefined,
+          sourceBatch: filterSourceBatch === 'all' ? undefined : filterSourceBatch
         });
 
         if (isActive) {
@@ -103,7 +138,7 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
 
     loadCount();
     return () => { isActive = false; };
-  }, [selectedProfile, filterState, filterCategory, filterPotencia]);
+  }, [selectedProfile, filterState, filterCategory, filterPotencia, filterSourceBatch]);
 
   const handleGenerate = async () => {
     if (!selectedProfile) return;
@@ -116,7 +151,8 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
         profile: selectedProfile,
         state: filterState === 'all' ? undefined : filterState,
         category: filterCategory === 'all' ? undefined : filterCategory,
-        potencia: filterPotencia || undefined
+        potencia: filterPotencia || undefined,
+        sourceBatch: filterSourceBatch === 'all' ? undefined : filterSourceBatch
       }, 5);
 
       const sampleDetails = sampleClients.map(c => ({
@@ -151,7 +187,8 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
         profile: selectedProfile || undefined,
         state: filterState === 'all' ? undefined : filterState,
         category: filterCategory === 'all' ? undefined : filterCategory,
-        potencia: filterPotencia || undefined
+        potencia: filterPotencia || undefined,
+        sourceBatch: filterSourceBatch === 'all' ? undefined : filterSourceBatch
       }, sendLimit);
 
       const exportData = exportClients.map(c => ({
@@ -192,11 +229,16 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
         profile: selectedProfile || undefined,
         state: filterState === 'all' ? undefined : filterState,
         category: filterCategory === 'all' ? undefined : filterCategory,
-        potencia: filterPotencia || undefined
+        potencia: filterPotencia || undefined,
+        sourceBatch: filterSourceBatch === 'all' ? undefined : filterSourceBatch
       }, sendLimit);
 
+      const displayDate = campaignDate
+        ? new Date(campaignDate + 'T12:00:00').toLocaleDateString('pt-BR')
+        : new Date().toLocaleDateString('pt-BR');
+
       await createCampaign({
-        name: `Campanha Billi ${selectedProfile} - ${new Date().toLocaleDateString()}`,
+        name: `Campanha Billi ${selectedProfile} - ${displayDate}`,
         segmentProfile: selectedProfile,
         segmentRegion: filterState,
         segmentCategory: filterCategory,
@@ -206,7 +248,8 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
         emailBody: generatedMessage.emailBody,
         whatsappBody: generatedMessage.whatsappBody,
         linkedinBody: generatedMessage.linkedinBody,
-        status: 'Enviada'
+        status: 'Enviada',
+        campaignDate: campaignDate || undefined
       }, leadIds);
 
       setTimeout(() => setSendStatus('sent'), 1500);
@@ -275,6 +318,32 @@ export const CampaignManager: React.FC<CampaignManagerProps> = ({ clients }) => 
                   <option value="all" className="text-slate-900">Todas as Classes</option>
                   {availableCategories.map(c => <option key={c} value={c} className="text-slate-900">{c}</option>)}
                 </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block flex items-center gap-1">
+                  <Database size={10} /> Filtrar por Base
+                </label>
+                <select
+                  className={selectClassName}
+                  value={filterSourceBatch}
+                  onChange={(e) => setFilterSourceBatch(e.target.value)}
+                >
+                  <option value="all" className="text-slate-900">Todas as Bases</option>
+                  {availableBatches.map(b => <option key={b} value={b} className="text-slate-900">{b}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block flex items-center gap-1">
+                  <Filter size={10} /> Data da Campanha
+                </label>
+                <input
+                  type="date"
+                  className={selectClassName}
+                  value={campaignDate}
+                  onChange={(e) => setCampaignDate(e.target.value)}
+                />
               </div>
 
               <div>

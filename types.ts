@@ -40,6 +40,7 @@ export interface Client {
   
   // Originação
   sourceBatch?: string;
+  fornecedorEnergia?: string;
   isDeleted?: boolean;
 }
 
@@ -93,6 +94,7 @@ export interface Campaign {
   linkedinBody?: string;
   status: 'Enviada' | 'Agendada' | 'Processando';
   createdAt: string;
+  campaignDate?: string;
 }
 
 export interface BilliAnalysis {

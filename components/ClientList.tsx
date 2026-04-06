@@ -125,7 +125,8 @@ export const ClientList: React.FC<ClientListProps> = ({
           telFixo: getVal('TEL_FIXO'),
           telMovel: getVal('TEL_MOVEL'),
           email: getVal('EMAIL'),
-          profile: getVal('TIPO_PERFIL') // Caso já venha preenchido
+          profile: getVal('TIPO_PERFIL'),
+          fornecedorEnergia: getVal('FORNECEDOR_ENERGIA')
         };
       }).filter(c => c.name && c.name !== 'Sem Nome') as Partial<Client>[];
 
@@ -421,6 +422,11 @@ export const ClientList: React.FC<ClientListProps> = ({
                   </td>
                   <td className="px-6 py-4">
                     <div className="space-y-1">
+                      {client.fornecedorEnergia && (
+                        <div className="flex items-center text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded w-fit">
+                          <Zap size={10} className="mr-1" /> {client.fornecedorEnergia}
+                        </div>
+                      )}
                       {client.tipoTarifa && (
                          <div className="flex items-center text-[10px] font-bold text-slate-600">
                            <Zap size={10} className="mr-1 text-primary" /> {client.tipoTarifa}
@@ -429,7 +435,6 @@ export const ClientList: React.FC<ClientListProps> = ({
                       {client.classePrincipal && (
                         <div className="text-[10px] text-slate-500 uppercase">{client.classePrincipal}</div>
                       )}
-                      {/* Potência removida daqui conforme solicitado */}
                     </div>
                   </td>
                   <td className="px-6 py-4">

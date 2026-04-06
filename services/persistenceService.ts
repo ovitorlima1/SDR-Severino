@@ -33,6 +33,7 @@ const mapDBToClient = (dbData: any): Client => ({
 
   // Originação
   sourceBatch: dbData.source_batch,
+  fornecedorEnergia: dbData.fornecedor_energia,
   isDeleted: dbData.is_deleted,
  
   // Inteligência
@@ -90,7 +91,35 @@ export interface CampaignFilters {
   state?: string;
   category?: string;
   potencia?: string;
+  sourceBatch?: string;
 }
+
+export const fetchAvailableBatches = async (): Promise<string[]> => {
+  // Busca via import_history para pegar os nomes das bases importadas
+  // (evita o problema de limite de 1000 linhas da tabela clients)
+  const { data: historyData } = await supabase
+    .from('import_history')
+    .select('filename')
+    .order('created_at', { ascending: false });
+
+  if (historyData && historyData.length > 0) {
+    const unique = Array.from(new Set(historyData.map((d: any) => d.filename as string).filter(Boolean)));
+    return unique.sort();
+  }
+
+  // Fallback: busca diretamente da tabela clients com limit alto
+  const { data, error } = await supabase
+    .from('clients')
+    .select('source_batch')
+    .not('source_batch', 'is', null)
+    .neq('source_batch', '')
+    .limit(100000);
+
+  if (error || !data) return [];
+
+  const unique = Array.from(new Set(data.map((d: any) => d.source_batch as string).filter(Boolean)));
+  return unique.sort();
+};
 
 export const fetchPendingClients = async (limit: number): Promise<Client[]> => {
   const { data, error } = await supabase
@@ -287,6 +316,7 @@ export const saveClientsToDB = async (clients: Partial<Client>[]) => {
         email: c.email,
         cnae: c.cnae,
         source_batch: c.sourceBatch,
+        fornecedor_energia: c.fornecedorEnergia || null,
         is_deleted: false
       };
 
@@ -346,6 +376,7 @@ export const fetchCampaignAudienceClients = async (filters: CampaignFilters, lim
       query = query.ilike('potencia', `%${filters.potencia}%`);
     }
   }
+  if (filters.sourceBatch && filters.sourceBatch !== 'all') query = query.eq('source_batch', filters.sourceBatch);
 
   const { data, error } = await query.limit(limit);
   if (error) return [];
@@ -366,6 +397,7 @@ export const fetchCampaignSampleClients = async (filters: CampaignFilters, limit
       query = query.ilike('potencia', `%${filters.potencia}%`);
     }
   }
+  if (filters.sourceBatch && filters.sourceBatch !== 'all') query = query.eq('source_batch', filters.sourceBatch);
 
   const { data, error } = await query;
   if (error) return [];
@@ -386,6 +418,7 @@ export const fetchCampaignAudienceIds = async (filters: CampaignFilters, limit: 
       query = query.ilike('potencia', `%${filters.potencia}%`);
     }
   }
+  if (filters.sourceBatch && filters.sourceBatch !== 'all') query = query.eq('source_batch', filters.sourceBatch);
 
   const { data, error } = await query.limit(limit);
   if (error) return [];
@@ -406,13 +439,14 @@ export const fetchCampaignAudienceCount = async (filters: CampaignFilters): Prom
       query = query.ilike('potencia', `%${filters.potencia}%`);
     }
   }
+  if (filters.sourceBatch && filters.sourceBatch !== 'all') query = query.eq('source_batch', filters.sourceBatch);
 
   const { count, error } = await query;
   return error ? 0 : (count || 0);
 };
 
 export const createCampaign = async (campaign: Omit<Campaign, 'id' | 'createdAt'>, leadIds: string[] = []) => {
-  const { data: campaignData, error: campaignError } = await supabase.from('campaigns').insert({
+  const insertPayload: Record<string, any> = {
     name: campaign.name,
     segment_profile: campaign.segmentProfile,
     segment_region: campaign.segmentRegion,
@@ -421,7 +455,13 @@ export const createCampaign = async (campaign: Omit<Campaign, 'id' | 'createdAt'
     email_subject: campaign.subject,
     email_body: campaign.body || campaign.emailBody,
     status: campaign.status
-  }).select().single();
+  };
+
+  if (campaign.campaignDate) {
+    insertPayload.created_at = campaign.campaignDate;
+  }
+
+  const { data: campaignData, error: campaignError } = await supabase.from('campaigns').insert(insertPayload).select().single();
 
   if (campaignError) throw campaignError;
 
