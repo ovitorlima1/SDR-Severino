@@ -1,5 +1,5 @@
 
-import { Client, SegmentAnalysis, Campaign, WhatsAppNumber } from '../types';
+import { Client, SegmentAnalysis, Campaign, WhatsAppNumber, Prospect } from '../types';
 import { supabase } from './supabase';
 
 /**
@@ -683,5 +683,123 @@ export const deleteClientsByBatch = async (batchName: string) => {
         .eq('source_batch', batchName);
 
     if (error) throw error;
+};
+
+// =============================================================================
+// PROSPECT HUB
+// =============================================================================
+
+const mapDBToProspect = (d: any): Prospect => ({
+  id: d.id,
+  nome: d.nome || 'Sem Nome',
+  cnpj: d.cnpj,
+  estado: d.estado,
+  municipio: d.municipio,
+  classe: d.classe,
+  tarifa: d.tarifa,
+  potencia: d.potencia != null ? Number(d.potencia) : undefined,
+  nivelTensao: d.nivel_tensao,
+  clienteLivre: d.cliente_livre,
+  email: d.email,
+  tel: d.tel,
+  score: d.score ?? 0,
+  segmento: d.segmento ?? 'C',
+  distribuidora: d.distribuidora,
+  sourceFile: d.source_file,
+});
+
+export interface ProspectStats {
+  baseTotal: number;
+  qualificados: number;
+  segA: number;
+  segB: number;
+  cnpjValido: number;
+  porDistribuidora: { distribuidora: string; total: number; segA: number }[];
+}
+
+const DISTRIBUIDORAS_EQUATORIAL = [
+  'Equatorial Alagoas',
+  'Equatorial Goiás',
+  'Equatorial Maranhão',
+  'Equatorial Pará',
+  'Equatorial Piauí',
+  'CEEE Equatorial (RS)',
+  'CEA Equatorial',
+];
+
+export const fetchProspectStats = async (): Promise<ProspectStats> => {
+  // Queries de contagem globais + contagens individuais por distribuidora
+  // (evita o limite de 1000 linhas do Supabase em queries de dados)
+  const distQueries = DISTRIBUIDORAS_EQUATORIAL.flatMap(d => [
+    supabase.from('prospects').select('*', { count: 'exact', head: true }).eq('distribuidora', d),
+    supabase.from('prospects').select('*', { count: 'exact', head: true }).eq('distribuidora', d).eq('segmento', 'A'),
+  ]);
+
+  const [resTotal, resQual, resSegA, resSegB, resCnpj, ...distResults] = await Promise.all([
+    supabase.from('prospects').select('*', { count: 'exact', head: true }),
+    supabase.from('prospects').select('*', { count: 'exact', head: true }).in('segmento', ['A', 'B']),
+    supabase.from('prospects').select('*', { count: 'exact', head: true }).eq('segmento', 'A'),
+    supabase.from('prospects').select('*', { count: 'exact', head: true }).eq('segmento', 'B'),
+    supabase.from('prospects').select('*', { count: 'exact', head: true }).not('cnpj', 'is', null),
+    ...distQueries,
+  ]);
+
+  // Reconstrói porDistribuidora a partir dos pares de resultados (total, segA)
+  const porDistribuidora = DISTRIBUIDORAS_EQUATORIAL
+    .map((distribuidora, i) => ({
+      distribuidora,
+      total: distResults[i * 2]?.count ?? 0,
+      segA: distResults[i * 2 + 1]?.count ?? 0,
+    }))
+    .filter(d => d.total > 0)
+    .sort((a, b) => b.segA - a.segA);
+
+  return {
+    baseTotal: resTotal.count ?? 0,
+    qualificados: resQual.count ?? 0,
+    segA: resSegA.count ?? 0,
+    segB: resSegB.count ?? 0,
+    cnpjValido: resCnpj.count ?? 0,
+    porDistribuidora,
+  };
+};
+
+export interface ProspectFilters {
+  segmento?: string;
+  estado?: string;
+  distribuidora?: string;
+  contato?: string;  // 'email' | 'tel' | 'ambos'
+  search?: string;
+}
+
+export const fetchProspects = async (
+  filters: ProspectFilters = {},
+  page = 0,
+  pageSize = 50
+): Promise<{ data: Prospect[]; count: number }> => {
+  let query = supabase
+    .from('prospects')
+    .select('*', { count: 'exact' })
+    .order('score', { ascending: false })
+    .range(page * pageSize, (page + 1) * pageSize - 1);
+
+  if (filters.segmento) query = query.eq('segmento', filters.segmento);
+  if (filters.estado)   query = query.eq('estado', filters.estado);
+  if (filters.distribuidora) query = query.eq('distribuidora', filters.distribuidora);
+  if (filters.contato === 'email')  query = query.not('email', 'is', null);
+  if (filters.contato === 'tel')    query = query.not('tel', 'is', null);
+  if (filters.contato === 'ambos')  query = query.not('email', 'is', null).not('tel', 'is', null);
+  if (filters.search) {
+    const term = `%${filters.search}%`;
+    query = query.or(`nome.ilike.${term},cnpj.ilike.${term},municipio.ilike.${term}`);
+  }
+
+  const { data, count, error } = await query;
+  if (error) throw error;
+
+  return {
+    data: (data ?? []).map(mapDBToProspect),
+    count: count ?? 0,
+  };
 };
 

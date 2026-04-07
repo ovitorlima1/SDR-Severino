@@ -198,7 +198,26 @@ export interface InactiveLead {
   pipelineValue: number;
 }
 
-export type ViewState = 'dashboard' | 'clients' | 'campaigns' | 'qualifier' | 'history' | 'whatsapp' | 'lead-analysis' | 'conversations' | 'active-chats';
+export type ViewState = 'dashboard' | 'clients' | 'campaigns' | 'qualifier' | 'history' | 'whatsapp' | 'lead-analysis' | 'conversations' | 'active-chats' | 'prospect-hub';
+
+export interface Prospect {
+  id: string;
+  nome: string;
+  cnpj?: string;
+  estado?: string;
+  municipio?: string;
+  classe?: string;
+  tarifa?: string;
+  potencia?: number;
+  nivelTensao?: string;
+  clienteLivre?: string;
+  email?: string;
+  tel?: string;
+  score: number;
+  segmento: 'A' | 'B' | 'C';
+  distribuidora?: string;
+  sourceFile?: string;
+}
 
 export interface KommoTalk {
   talk_id: number;

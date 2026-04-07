@@ -9,6 +9,7 @@ import { LeadQualifier } from './components/LeadQualifier';
 import { ConversionFunnel } from './components/ConversionFunnel';
 import { LeadAnalysis } from './components/LeadAnalysis';
 import { Conversations } from './components/Conversations';
+import { ProspectHub } from './components/ProspectHub';
 import { Client, ViewState } from './types';
 import { analyzeSegments } from './services/geminiService';
 import {
@@ -241,6 +242,8 @@ const App: React.FC = () => {
         return <LeadAnalysis />;
       case 'conversations':
         return <Conversations />;
+      case 'prospect-hub':
+        return <ProspectHub />;
       default:
         return <Dashboard clients={clients} />;
     }

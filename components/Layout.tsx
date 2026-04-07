@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, Users, Send, Menu, Target, LogOut, Clock, Smartphone, BarChart2, MessagesSquare } from 'lucide-react';
+import { LayoutDashboard, Users, Send, Menu, Target, LogOut, Clock, Smartphone, BarChart2, MessagesSquare, Crosshair } from 'lucide-react';
 import { ViewState } from '../types';
 
 interface LayoutProps {
@@ -47,6 +47,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentView, onChangeV
           <NavItem view="dashboard" icon={LayoutDashboard} label="Dashboard" />
           <NavItem view="clients" icon={Users} label="Originação de Clientes" />
           <NavItem view="qualifier" icon={Target} label="Inteligência Qualificação" />
+          <NavItem view="prospect-hub" icon={Crosshair} label="Prospect HUB" />
           <div className="mt-6 mb-2 px-4 border-t border-slate-100"></div>
           <p className="px-4 text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest mt-4">Gestão de Disparos</p>
           <NavItem view="campaigns" icon={Send} label="Gerador de Campanhas WhatsApp" />
@@ -101,6 +102,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentView, onChangeV
               <NavItem view="dashboard" icon={LayoutDashboard} label="Dashboard" />
               <NavItem view="clients" icon={Users} label="Clientes" />
               <NavItem view="qualifier" icon={Target} label="Qualificador" />
+              <NavItem view="prospect-hub" icon={Crosshair} label="Prospect HUB" />
               <div className="border-t border-slate-100 my-2"></div>
               <NavItem view="campaigns" icon={Send} label="Criar Campanha" />
               <NavItem view="history" icon={Clock} label="Histórico" />
