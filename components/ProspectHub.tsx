@@ -152,7 +152,7 @@ export const ProspectHub: React.FC = () => {
             Prospect HUB
           </h2>
           <p className="text-slate-500 font-medium mt-1">
-            Inteligência de prospecção · Grupo Equatorial Energia · 6 estados
+            Inteligência de prospecção · Billi · 6 estados
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -183,7 +183,7 @@ export const ProspectHub: React.FC = () => {
           <KpiCard label="Seg A — HOT"      value={stats?.segA ?? 0}         sub="Score ≥ 7" />
           <KpiCard label="Seg B — Morno"    value={stats?.segB ?? 0}         sub="Score 4–6" />
           <KpiCard label="CNPJ Válido"      value={stats?.cnpjValido ?? 0}   sub="Prontos p/ enriq." />
-          <KpiCard label="Grupo Equatorial" value="6 estados"                sub="Relacionamento único" />
+          <KpiCard label="Billi" value="6 estados"                sub="Relacionamento único" />
         </div>
       )}
 
