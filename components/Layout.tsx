@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, Users, Send, Menu, Target, LogOut, Clock, Smartphone, BarChart2, MessagesSquare, Crosshair } from 'lucide-react';
+import { LayoutDashboard, Users, Send, Menu, Target, LogOut, Clock, Smartphone, BarChart2, Crosshair } from 'lucide-react';
 import { ViewState } from '../types';
 
 interface LayoutProps {
@@ -56,7 +56,6 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentView, onChangeV
           <p className="px-4 text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest mt-4">Infraestrutura</p>
           <NavItem view="whatsapp" icon={Smartphone} label="Funil de Conversão " />
           <NavItem view="lead-analysis" icon={BarChart2} label="Plano de Reconquista" />
-          <NavItem view="conversations" icon={MessagesSquare} label="Conversas" />
         </nav>
 
         <div className="p-4 m-4 bg-slate-50 rounded-2xl border border-slate-100">
@@ -109,7 +108,6 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentView, onChangeV
               <div className="border-t border-slate-100 my-2"></div>
               <NavItem view="whatsapp" icon={Smartphone} label="Gestão WhatsApp" />
               <NavItem view="lead-analysis" icon={BarChart2} label="Plano de Reconquista" />
-              <NavItem view="conversations" icon={MessagesSquare} label="Conversas" />
             </nav>
           </div>
         )}
