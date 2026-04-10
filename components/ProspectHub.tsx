@@ -3,7 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   PieChart, Pie, Legend,
 } from 'recharts';
-import { Search, Mail, Phone, Building2, MapPin, RefreshCw, Crosshair } from 'lucide-react';
+import { Search, Mail, Phone, Building2, MapPin, RefreshCw, Crosshair, X } from 'lucide-react';
 import { Prospect } from '../types';
 import {
   fetchProspects,
@@ -87,6 +87,14 @@ export const ProspectHub: React.FC = () => {
   const [filters, setFilters] = useState<ProspectFilters>({});
   const [searchInput, setSearchInput] = useState('');
   const [searchDebounced, setSearchDebounced] = useState('');
+  const [contactPopup, setContactPopup] = useState<{ type: 'email' | 'tel'; value: string; name: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   // Debounce da busca
   useEffect(() => {
@@ -143,6 +151,7 @@ export const ProspectHub: React.FC = () => {
   ].filter(d => d.value > 0) : [];
 
   return (
+    <>
     <div className="space-y-8">
       {/* HEADER */}
       <div className="border-b border-slate-200 pb-6 flex items-center justify-between">
@@ -388,14 +397,20 @@ export const ProspectHub: React.FC = () => {
                     <td className="px-3 py-2.5">
                       <div className="flex gap-1.5">
                         {p.email && (
-                          <span className="flex items-center gap-1 text-[10px] bg-blue-50 text-blue-600 border border-blue-200 px-1.5 py-0.5 rounded font-bold">
+                          <button
+                            onClick={() => setContactPopup({ type: 'email', value: p.email!, name: p.nome })}
+                            className="flex items-center gap-1 text-[10px] bg-blue-50 text-blue-600 border border-blue-200 px-1.5 py-0.5 rounded font-bold hover:bg-blue-100 transition-colors"
+                          >
                             <Mail size={9} /> email
-                          </span>
+                          </button>
                         )}
                         {p.tel && (
-                          <span className="flex items-center gap-1 text-[10px] bg-green-50 text-green-600 border border-green-200 px-1.5 py-0.5 rounded font-bold">
+                          <button
+                            onClick={() => setContactPopup({ type: 'tel', value: p.tel!, name: p.nome })}
+                            className="flex items-center gap-1 text-[10px] bg-green-50 text-green-600 border border-green-200 px-1.5 py-0.5 rounded font-bold hover:bg-green-100 transition-colors"
+                          >
                             <Phone size={9} /> tel
-                          </span>
+                          </button>
                         )}
                         {!p.email && !p.tel && <span className="text-slate-300 text-xs">—</span>}
                       </div>
@@ -433,5 +448,46 @@ export const ProspectHub: React.FC = () => {
         )}
       </div>
     </div>
+
+    {/* POPUP DE CONTATO */}
+
+    {contactPopup && (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm"
+        onClick={() => { setContactPopup(null); setCopied(false); }}
+      >
+        <div
+          className="bg-white rounded-2xl shadow-2xl p-6 w-80 flex flex-col gap-4"
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {contactPopup.type === 'email'
+                ? <Mail size={18} className="text-blue-500" />
+                : <Phone size={18} className="text-green-500" />}
+              <span className="text-sm font-black text-slate-900 uppercase tracking-wide">
+                {contactPopup.type === 'email' ? 'E-mail' : 'Telefone'}
+              </span>
+            </div>
+            <button onClick={() => { setContactPopup(null); setCopied(false); }} className="text-slate-400 hover:text-slate-700 transition-colors">
+              <X size={18} />
+            </button>
+          </div>
+          <p className="text-xs text-slate-500 font-medium -mt-2 truncate">{contactPopup.name}</p>
+          <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 break-all select-all">
+            {contactPopup.value}
+          </div>
+          <button
+            onClick={() => handleCopy(contactPopup.value)}
+            className={`py-2.5 rounded-xl text-sm font-black transition-colors ${
+              copied ? 'bg-green-500 text-white' : 'bg-slate-900 text-white hover:bg-slate-700'
+            }`}
+          >
+            {copied ? '✓ Copiado!' : 'Copiar'}
+          </button>
+        </div>
+      </div>
+    )}
+    </>
   );
 };

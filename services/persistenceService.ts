@@ -480,6 +480,23 @@ export const createCampaign = async (campaign: Omit<Campaign, 'id' | 'createdAt'
   return campaignData;
 };
 
+export const updateCampaign = async (campaignId: string, fields: {
+  name?: string;
+  segmentProfile?: string;
+  segmentRegion?: string;
+  status?: string;
+  createdAt?: string;
+}): Promise<void> => {
+  const payload: Record<string, any> = {};
+  if (fields.name !== undefined) payload.name = fields.name;
+  if (fields.segmentProfile !== undefined) payload.segment_profile = fields.segmentProfile;
+  if (fields.segmentRegion !== undefined) payload.segment_region = fields.segmentRegion;
+  if (fields.status !== undefined) payload.status = fields.status;
+  if (fields.createdAt !== undefined) payload.created_at = fields.createdAt;
+  const { error } = await supabase.from('campaigns').update(payload).eq('id', campaignId);
+  if (error) throw error;
+};
+
 export const fetchLeadsByCampaign = async (campaignId: string): Promise<Client[]> => {
   const { data, error } = await supabase
     .from('campaign_leads')
@@ -500,6 +517,30 @@ export const deleteClientFromDB = async (clientId: string) => {
     .delete()
     .eq('id', clientId);
 
+  if (error) throw error;
+};
+
+export const fetchClientIdsByCnpj = async (cnpjs: string[]): Promise<{ id: string; cnpj: string }[]> => {
+  if (cnpjs.length === 0) return [];
+  const { data, error } = await supabase
+    .from('clients')
+    .select('id, cnpj')
+    .in('cnpj', cnpjs);
+  if (error) return [];
+  return data || [];
+};
+
+export const deleteCampaign = async (campaignId: string): Promise<void> => {
+  const { error: leadsError } = await supabase
+    .from('campaign_leads')
+    .delete()
+    .eq('campaign_id', campaignId);
+  if (leadsError) throw leadsError;
+
+  const { error } = await supabase
+    .from('campaigns')
+    .delete()
+    .eq('id', campaignId);
   if (error) throw error;
 };
 
