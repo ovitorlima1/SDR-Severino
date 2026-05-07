@@ -217,6 +217,24 @@ export interface Prospect {
   segmento: 'A' | 'B' | 'C';
   distribuidora?: string;
   sourceFile?: string;
+  // campos extras vindos da vw_leads_completo
+  estagioML?: string;
+  decisorNome?: string;
+  decisorEmail?: string;
+  decisorTelefone?: string;
+  decisorCargo?: string;
+}
+
+export interface Decisor {
+  id: string;
+  leadId: string;
+  nome: string;
+  cargo?: string;
+  email?: string;
+  telefone?: string;
+  linkedin?: string;
+  eDecisor?: boolean;
+  fonte?: string;
 }
 
 export interface KommoTalk {

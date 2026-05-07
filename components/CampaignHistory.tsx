@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { Clock, BarChart3, Users, Send, Loader2, PieChart as PieChartIcon, Calendar, Upload, X } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, ReferenceLine } from 'recharts';
-import { fetchAllCampaigns, fetchLeadsByCampaign, deleteClientFromDB, deleteCampaign, fetchClientIdsByCnpj, createCampaign, updateCampaign } from '../services/persistenceService';
+import { fetchAllCampaigns, fetchLeadsByCampaign, deleteClientFromDB, deleteCampaign, upsertClientsByCnpj, createCampaign, updateCampaign } from '../services/persistenceService';
 import { Campaign, Client } from '../types';
 import { ChevronDown, ChevronUp, UserCheck, Trash2, FileSpreadsheet, Pencil, Check } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -27,7 +27,7 @@ export const CampaignHistory: React.FC = () => {
 
   // Import Excel
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [importPreview, setImportPreview] = useState<{ fileName: string; cnpjs: string[]; total: number } | null>(null);
+  const [importPreview, setImportPreview] = useState<{ fileName: string; rows: { cnpj: string; nome?: string; email?: string; tel?: string }[]; total: number } | null>(null);
   const [importName, setImportName] = useState('');
   const [importProfile, setImportProfile] = useState<string>('Importado');
   const [importStatus, setImportStatus] = useState<'Enviada' | 'Agendada' | 'Processando'>('Enviada');
@@ -101,9 +101,16 @@ export const CampaignHistory: React.FC = () => {
     reader.onload = (evt) => {
       const wb = XLSX.read(new Uint8Array(evt.target!.result as ArrayBuffer), { type: 'array' });
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json<any>(ws);
-      const cnpjs = rows.map(r => r['CNPJ'] || r['cnpj'] || '').filter(Boolean);
-      setImportPreview({ fileName: file.name, cnpjs, total: rows.length });
+      const raw = XLSX.utils.sheet_to_json<any>(ws);
+      const parsed = raw
+        .map(r => ({
+          cnpj:  String(r['CNPJ']     || r['cnpj']     || '').trim(),
+          nome:  String(r['Empresa']  || r['EMPRESA']  || r['Nome'] || r['NOME'] || '').trim() || undefined,
+          email: String(r['E-mail']   || r['Email']    || r['email'] || r['EMAIL'] || '').trim() || undefined,
+          tel:   String(r['Telefone'] || r['TELEFONE'] || r['Tel']  || r['TEL']   || '').trim() || undefined,
+        }))
+        .filter(r => r.cnpj);
+      setImportPreview({ fileName: file.name, rows: parsed, total: raw.length });
       setImportName(`Importação Excel - ${new Date().toLocaleDateString('pt-BR')}`);
     };
     reader.readAsArrayBuffer(file);
@@ -114,7 +121,9 @@ export const CampaignHistory: React.FC = () => {
     if (!importPreview || !importName.trim()) return;
     setIsImporting(true);
     try {
-      const found = await fetchClientIdsByCnpj(importPreview.cnpjs);
+      const found = await upsertClientsByCnpj(
+        importPreview.rows.map(r => ({ ...r, sourceBatch: importPreview.fileName }))
+      );
       const leadIds = found.map(c => c.id);
       const result = await createCampaign({
         name: importName.trim(),
@@ -323,7 +332,7 @@ export const CampaignHistory: React.FC = () => {
     return Object.entries(grouped).map(([name, value]) => ({ name, value }));
   }, [campaigns]);
 
-  const COLORS = ['#F5BE01', '#1E293B', '#94A3B8', '#CBD5E1', '#E2E8F0'];
+  const COLORS = ['#E0B814', '#1E293B', '#94A3B8', '#CBD5E1', '#E2E8F0'];
 
   if (loading) {
     return (
@@ -358,7 +367,7 @@ export const CampaignHistory: React.FC = () => {
           <div className="flex-1 space-y-2">
             <p className="text-xs font-black text-blue-700 uppercase tracking-widest">Importar planilha</p>
             <p className="text-sm text-slate-600 font-medium">
-              <span className="font-black text-slate-900">{importPreview.total}</span> contatos em <span className="font-black text-slate-900">{importPreview.fileName}</span>
+              <span className="font-black text-slate-900">{importPreview.rows.length}</span> contatos com CNPJ em <span className="font-black text-slate-900">{importPreview.fileName}</span>
             </p>
             <input
               type="text"
@@ -544,7 +553,7 @@ export const CampaignHistory: React.FC = () => {
                           ? (entry.isCurrent ? '#FEF3C7' : '#E2E8F0')
                           : weeklyGoal > 0 && entry.value >= weeklyGoal
                             ? '#22c55e'
-                            : entry.isCurrent ? '#F5BE01' : '#1E293B'
+                            : entry.isCurrent ? '#E0B814' : '#1E293B'
                       }
                     />
                   ))}

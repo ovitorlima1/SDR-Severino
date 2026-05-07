@@ -32,7 +32,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentView, onChangeV
   );
 
   return (
-    <div className="flex h-screen bg-[#F8FAFC] overflow-hidden font-sans text-slate-900">
+    <div className="flex h-screen bg-[#F5F5F5] overflow-hidden font-sans text-slate-900">
       {/* Sidebar - Desktop (Clean White) */}
       <aside className="hidden md:flex flex-col w-72 bg-white border-r border-slate-200 relative shadow-sm z-10">
         <div className="p-8 pb-6">
@@ -112,7 +112,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentView, onChangeV
           </div>
         )}
 
-        <div className="flex-1 overflow-auto p-4 md:p-10 scrollbar-hide bg-[#F8FAFC]">
+        <div className="flex-1 overflow-auto p-4 md:p-10 scrollbar-hide bg-[#F5F5F5]">
           <div className="max-w-7xl mx-auto w-full space-y-8">
             {children}
           </div>

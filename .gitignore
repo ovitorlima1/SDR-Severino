@@ -24,3 +24,10 @@ dist-ssr
 *.sw?
 .env
 .claude/
+
+# Pastas com dados de clientes e scripts com credenciais
+campanhas/
+database/
+enriquecimento/
+csv_enriquecimento/
+scripts/

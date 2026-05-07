@@ -70,7 +70,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   }, []); // Executa apenas na montagem
 
   // Cores Clean: Amarelo (Primary) + Tons de Slate
-  const COLORS = ['#F5BE01', '#E2E8F0', '#94A3B8', '#64748B', '#475569', '#1E293B'];
+  const COLORS = ['#E0B814', '#E2E8F0', '#94A3B8', '#64748B', '#475569', '#1E293B'];
 
   // Prepara dados de perfil para o gráfico de pizza (adiciona porcentagem)
   const chartProfileData = React.useMemo(() => {
@@ -266,7 +266,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     cursor={{ fill: '#f8fafc' }}
                     contentStyle={{ backgroundColor: '#fff', color: '#1E293B', borderRadius: '8px', border: '1px solid #E2E8F0' }}
                   />
-                  <Bar dataKey="value" fill="#F5BE01" barSize={20} radius={[0, 4, 4, 0]}>
+                  <Bar dataKey="value" fill="#E0B814" barSize={20} radius={[0, 4, 4, 0]}>
                     <LabelList
                       dataKey="value"
                       position="right"
@@ -312,7 +312,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     cursor={{ fill: '#f8fafc' }}
                     contentStyle={{ backgroundColor: '#fff', color: '#1E293B', borderRadius: '8px', border: '1px solid #E2E8F0' }}
                   />
-                  <Bar dataKey="value" fill="#F5BE01" barSize={20} radius={[0, 4, 4, 0]}>
+                  <Bar dataKey="value" fill="#E0B814" barSize={20} radius={[0, 4, 4, 0]}>
                     <LabelList
                       dataKey="value"
                       position="right"

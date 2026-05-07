@@ -1,5 +1,5 @@
 
-import { Client, SegmentAnalysis, Campaign, WhatsAppNumber, Prospect } from '../types';
+import { Client, SegmentAnalysis, Campaign, WhatsAppNumber, Prospect, Decisor } from '../types';
 import { supabase } from './supabase';
 
 /**
@@ -530,6 +530,33 @@ export const fetchClientIdsByCnpj = async (cnpjs: string[]): Promise<{ id: strin
   return data || [];
 };
 
+export const upsertClientsByCnpj = async (
+  rows: { cnpj: string; nome?: string; email?: string; tel?: string; sourceBatch?: string }[]
+): Promise<{ id: string; cnpj: string }[]> => {
+  if (rows.length === 0) return [];
+
+  const payload = rows.map(r => ({
+    cnpj: r.cnpj,
+    ...(r.nome  ? { nome: r.nome }          : {}),
+    ...(r.email ? { email: r.email }        : {}),
+    ...(r.tel   ? { tel_movel: r.tel }      : {}),
+    source_batch: r.sourceBatch || null,
+    is_deleted: false,
+  }));
+
+  await supabase
+    .from('clients')
+    .upsert(payload, { onConflict: 'cnpj', ignoreDuplicates: true });
+
+  const { data, error } = await supabase
+    .from('clients')
+    .select('id, cnpj')
+    .in('cnpj', rows.map(r => r.cnpj));
+
+  if (error) throw error;
+  return data || [];
+};
+
 export const deleteCampaign = async (campaignId: string): Promise<void> => {
   const { error: leadsError } = await supabase
     .from('campaign_leads')
@@ -730,6 +757,7 @@ export const deleteClientsByBatch = async (batchName: string) => {
 // PROSPECT HUB
 // =============================================================================
 
+// Mapeia tabela prospects → Prospect
 const mapDBToProspect = (d: any): Prospect => ({
   id: d.id,
   nome: d.nome || 'Sem Nome',
@@ -740,14 +768,20 @@ const mapDBToProspect = (d: any): Prospect => ({
   tarifa: d.tarifa,
   potencia: d.potencia != null ? Number(d.potencia) : undefined,
   nivelTensao: d.nivel_tensao,
-  clienteLivre: d.cliente_livre,
+  clienteLivre: d.cliente_livre != null ? String(d.cliente_livre) : undefined,
   email: d.email,
   tel: d.tel,
   score: d.score ?? 0,
-  segmento: d.segmento ?? 'C',
+  segmento: d.segmento ? (d.segmento as 'A' | 'B' | 'C') : 'C',
   distribuidora: d.distribuidora,
   sourceFile: d.source_file,
+  estagioML: d.estagio_ml,
+  decisorNome: d.decisor_nome,
+  decisorEmail: d.decisor_email,
+  decisorTelefone: d.decisor_telefone,
+  decisorCargo: d.decisor_cargo,
 });
+
 
 export interface ProspectStats {
   baseTotal: number;
@@ -768,9 +802,8 @@ const DISTRIBUIDORAS_EQUATORIAL = [
   'CEA Equatorial',
 ];
 
+// Fonte: tabela prospects (Option B — mantém columns originais da importação)
 export const fetchProspectStats = async (): Promise<ProspectStats> => {
-  // Queries de contagem globais + contagens individuais por distribuidora
-  // (evita o limite de 1000 linhas do Supabase em queries de dados)
   const distQueries = DISTRIBUIDORAS_EQUATORIAL.flatMap(d => [
     supabase.from('prospects').select('*', { count: 'exact', head: true }).eq('distribuidora', d),
     supabase.from('prospects').select('*', { count: 'exact', head: true }).eq('distribuidora', d).eq('segmento', 'A'),
@@ -785,7 +818,6 @@ export const fetchProspectStats = async (): Promise<ProspectStats> => {
     ...distQueries,
   ]);
 
-  // Reconstrói porDistribuidora a partir dos pares de resultados (total, segA)
   const porDistribuidora = DISTRIBUIDORAS_EQUATORIAL
     .map((distribuidora, i) => ({
       distribuidora,
@@ -825,7 +857,7 @@ export const fetchProspects = async (
     .range(page * pageSize, (page + 1) * pageSize - 1);
 
   if (filters.segmento) query = query.eq('segmento', filters.segmento);
-  if (filters.estado)   query = query.eq('estado', filters.estado);
+  if (filters.estado)        query = query.eq('estado', filters.estado);
   if (filters.distribuidora) query = query.eq('distribuidora', filters.distribuidora);
   if (filters.contato === 'email')  query = query.not('email', 'is', null);
   if (filters.contato === 'tel')    query = query.not('tel', 'is', null);
@@ -841,6 +873,184 @@ export const fetchProspects = async (
   return {
     data: (data ?? []).map(mapDBToProspect),
     count: count ?? 0,
+  };
+};
+
+// =============================================================================
+// DECISORES — leads_decisores (N por lead)
+// =============================================================================
+const mapDBToDecisor = (d: any): Decisor => ({
+  id: d.id,
+  leadId: d.lead_id,
+  nome: d.nome || 'Sem nome',
+  cargo: d.cargo,
+  email: d.email,
+  telefone: d.telefone,
+  linkedin: d.linkedin_url ?? d.linkedin,  // coluna real é linkedin_url
+  eDecisor: d.e_decisor ?? false,
+  fonte: d.fonte,
+});
+
+export const fetchLeadDecisores = async (leadId: string): Promise<Decisor[]> => {
+  const { data, error } = await supabase
+    .from('leads_decisores')
+    .select('*')
+    .eq('lead_id', leadId)
+    .order('e_decisor', { ascending: false }); // decisor principal primeiro
+
+  if (error) throw error;
+  return (data ?? []).map(mapDBToDecisor);
+};
+
+// =============================================================================
+// FUNIL DE QUALIFICAÇÃO — dados da tabela energy_analysis (ANEEL BDGD)
+// =============================================================================
+
+export interface FunilStats {
+  // KPIs globais
+  universoReal: number;       // não geradores
+  naoMigrados: number;        // cliente_livre=0, não gerador
+  jaNoML: number;             // cliente_livre=1, não gerador
+  funilQuente: number;        // score_final >= 6, não gerador
+  elegiveis: number;          // score_final >= 4, não gerador
+  primeiraCarga: number;      // registros da tabela clients (1ª importação)
+
+  // Por UF — para gráfico empilhado
+  porUF: {
+    uf: string;
+    naoMigrados: number;
+    jaNoML: number;
+  }[];
+
+  // Distribuição de score — para histograma
+  scoreDistribuicao: {
+    faixa: string;
+    count: number;
+    color: string;
+  }[];
+
+  // Funil quente por UF
+  funilQuentePorUF: {
+    uf: string;
+    count: number;
+  }[];
+
+  // Top 10 municípios por funil quente
+  topMunicipios: {
+    municipio: string;
+    uf: string;
+    naoMigrados: number;
+    funilQuente: number;
+  }[];
+}
+
+const UFS_ORDER = ['MA', 'PA', 'AL', 'GO', 'PI', 'RS', 'AP'];
+
+export const fetchFunilStats = async (): Promise<FunilStats> => {
+  // micro_gd e cliente_livre são INTEIROS (0/1) no banco — não usar booleans.
+  // "sem gerador" = micro_gd IS NULL OR micro_gd = 0
+  // "não migrado" = acima + (cliente_livre IS NULL OR cliente_livre = 0)
+  // "já no ML"   = acima + cliente_livre = 1
+
+  const GD_FILTER    = 'micro_gd.is.null,micro_gd.eq.0';
+  const NM_FILTER    = 'cliente_livre.is.null,cliente_livre.eq.0';
+
+  // ── KPIs globais ─────────────────────────────────────────────────────────
+  const [
+    resUniverso, resNaoMig, resJaML,
+    resFunil, resEleg, resCarga,
+  ] = await Promise.all([
+    supabase.from('energy_analysis').select('*', { count: 'exact', head: true })
+      .or(GD_FILTER),
+    supabase.from('energy_analysis').select('*', { count: 'exact', head: true })
+      .or(GD_FILTER).or(NM_FILTER),
+    supabase.from('energy_analysis').select('*', { count: 'exact', head: true })
+      .or(GD_FILTER).eq('cliente_livre', 1),
+    supabase.from('energy_analysis').select('*', { count: 'exact', head: true })
+      .or(GD_FILTER).or(NM_FILTER).gte('score_final', 6),
+    supabase.from('energy_analysis').select('*', { count: 'exact', head: true })
+      .or(GD_FILTER).or(NM_FILTER).gte('score_final', 4),
+    supabase.from('clients').select('*', { count: 'exact', head: true }),
+  ]);
+
+  const universoReal  = resUniverso.count  ?? 0;
+  const naoMigrados   = resNaoMig.count    ?? 0;
+  const jaNoML        = resJaML.count      ?? 0;
+  const funilQuente   = resFunil.count     ?? 0;
+  const elegiveis     = resEleg.count      ?? 0;
+  const primeiraCarga = resCarga.count     ?? 0;
+
+  // ── Por UF: 7 UFs × 2 (não migrados + já ML) ─────────────────────────────
+  const ufResults = await Promise.all(
+    UFS_ORDER.flatMap(uf => [
+      supabase.from('energy_analysis').select('*', { count: 'exact', head: true })
+        .or(GD_FILTER).or(NM_FILTER).eq('uf', uf),
+      supabase.from('energy_analysis').select('*', { count: 'exact', head: true })
+        .or(GD_FILTER).eq('cliente_livre', 1).eq('uf', uf),
+    ])
+  );
+  const porUF = UFS_ORDER
+    .map((uf, i) => ({
+      uf,
+      naoMigrados: ufResults[i * 2].count     ?? 0,
+      jaNoML:      ufResults[i * 2 + 1].count ?? 0,
+    }))
+    .filter(d => d.naoMigrados + d.jaNoML > 0)
+    .sort((a, b) => (b.naoMigrados + b.jaNoML) - (a.naoMigrados + a.jaNoML));
+
+  // ── Score distribution: 6 faixas ─────────────────────────────────────────
+  const SCORE_COLORS = ['#94a3b8', '#64748b', '#f59e0b', '#f97316', '#ef4444', '#dc2626'];
+  const SCORE_LABELS = ['0–2', '3–4', '5–6', '7–8', '9–10', '11+'];
+  const scoreBounds  = [[0,2],[3,4],[5,6],[7,8],[9,10],[11,999]] as const;
+
+  const scoreResults = await Promise.all(
+    scoreBounds.map(([min, max]) =>
+      supabase.from('energy_analysis').select('*', { count: 'exact', head: true })
+        .or(GD_FILTER).gte('score_final', min).lte('score_final', max)
+    )
+  );
+  const scoreDistribuicao = SCORE_LABELS.map((faixa, i) => ({
+    faixa,
+    count: scoreResults[i].count ?? 0,
+    color: SCORE_COLORS[i],
+  }));
+
+  // ── Funil quente por UF ───────────────────────────────────────────────────
+  const hotUFResults = await Promise.all(
+    UFS_ORDER.map(uf =>
+      supabase.from('energy_analysis').select('*', { count: 'exact', head: true })
+        .or(GD_FILTER).or(NM_FILTER).gte('score_final', 6).eq('uf', uf)
+    )
+  );
+  const funilQuentePorUF = UFS_ORDER
+    .map((uf, i) => ({ uf, count: hotUFResults[i].count ?? 0 }))
+    .filter(d => d.count > 0)
+    .sort((a, b) => b.count - a.count);
+
+  // ── Top municípios — fetch com range (só elegíveis, ≤5000 linhas) ─────────
+  const { data: munData } = await supabase
+    .from('energy_analysis')
+    .select('municipio, uf, score_final')
+    .or(GD_FILTER)
+    .or(NM_FILTER)
+    .gte('score_final', 4)
+    .not('municipio', 'is', null)
+    .range(0, 4999);
+
+  const munMap: Record<string, { municipio: string; uf: string; naoMigrados: number; funilQuente: number }> = {};
+  for (const row of (munData ?? [])) {
+    const key = row.municipio as string;
+    if (!munMap[key]) munMap[key] = { municipio: key, uf: (row as any).uf ?? '', naoMigrados: 0, funilQuente: 0 };
+    munMap[key].naoMigrados++;
+    if ((row.score_final ?? 0) >= 6) munMap[key].funilQuente++;
+  }
+  const topMunicipios = Object.values(munMap)
+    .sort((a, b) => b.funilQuente - a.funilQuente)
+    .slice(0, 10);
+
+  return {
+    universoReal, naoMigrados, jaNoML, funilQuente, elegiveis, primeiraCarga,
+    porUF, scoreDistribuicao, funilQuentePorUF, topMunicipios,
   };
 };
 
